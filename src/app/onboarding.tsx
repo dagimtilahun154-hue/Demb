@@ -1,314 +1,185 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, useColorScheme, Pressable, TextInput, Animated } from 'react-native';
-import { Image } from 'expo-image';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '@/store';
-import NeomorphicCard from '@/components/NeomorphicCard';
 
-type ProfileType = 'student' | 'employee' | 'entrepreneur' | 'parent' | 'other' | '';
+type Challenge = 'scroll' | 'burnout' | 'focus' | 'sleep' | 'drained' | 'accountability';
+type Goal = 'balance' | 'focus' | 'sleep' | 'movement' | 'habits' | 'wellbeing' | 'friends' | '';
+
+const challenges: Array<{ id: Challenge; label: string; icon: string; color: string }> = [
+  { id: 'scroll', label: 'I scroll too much', icon: 'phone-portrait-outline', color: '#6C63FF' },
+  { id: 'burnout', label: 'Burned out', icon: 'cloudy-night-outline', color: '#F59E0B' },
+  { id: 'focus', label: 'Lose focus', icon: 'locate-outline', color: '#EF4444' },
+  { id: 'sleep', label: 'Sleep late', icon: 'moon-outline', color: '#F6C344' },
+  { id: 'drained', label: 'Drained', icon: 'flash-outline', color: '#F59E0B' },
+  { id: 'accountability', label: 'Need support', icon: 'people-outline', color: '#22C55E' },
+];
+
+const goals: Array<{ id: Goal; title: string; subtitle: string; icon: string }> = [
+  { id: 'balance', title: 'Better Digital Balance', subtitle: 'Regain control of your time.', icon: 'git-branch-outline' },
+  { id: 'focus', title: 'Better Focus', subtitle: 'Sharpen your attention.', icon: 'locate-outline' },
+  { id: 'sleep', title: 'Better Sleep', subtitle: 'Wake up refreshed.', icon: 'cloudy-night-outline' },
+  { id: 'movement', title: 'More Movement', subtitle: 'Add gentle activity.', icon: 'walk-outline' },
+  { id: 'habits', title: 'Healthier Daily Habits', subtitle: 'Build actions that stick.', icon: 'water-outline' },
+  { id: 'wellbeing', title: 'Better Emotional Wellbeing', subtitle: 'Feel calmer daily.', icon: 'happy-outline' },
+  { id: 'friends', title: 'Accountability With Friends', subtitle: 'Stay motivated together.', icon: 'handshake-outline' },
+];
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const scheme = useColorScheme() ?? 'light';
-  const colors = Colors[scheme];
   const insets = useSafeAreaInsets();
-  const isDark = scheme === 'dark';
-  
   const setOnboarding = useAppStore(state => state.setOnboarding);
-
-  const [step, setStep] = useState(1);
-  const [name, setName] = useState('');
-  const [profileType, setProfileType] = useState<ProfileType>('');
-  const [biggestProblem, setBiggestProblem] = useState('');
-  const [dailyGoal, setDailyGoal] = useState('');
-
-  // Moving background blobs
-  const bounceAnim = React.useRef(new Animated.Value(0)).current;
+  const [step, setStep] = useState<1 | 2>(1);
+  const [selectedChallenges, setSelectedChallenges] = useState<Challenge[]>([]);
+  const [goal, setGoal] = useState<Goal>('balance');
+  const glow = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(bounceAnim, {
+        Animated.timing(glow, {
           toValue: 1,
-          duration: 10000,
+          duration: 4200,
           useNativeDriver: true,
         }),
-        Animated.timing(bounceAnim, {
+        Animated.timing(glow, {
           toValue: 0,
-          duration: 10000,
+          duration: 4200,
           useNativeDriver: true,
         }),
       ])
     ).start();
-  }, []);
+  }, [glow]);
 
-  const transX = bounceAnim.interpolate({
+  const glowY = glow.interpolate({
     inputRange: [0, 1],
-    outputRange: [-30, 30],
-  });
-  const transY = bounceAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-15, 15],
+    outputRange: [0, 18],
   });
 
-  const handleNext = () => {
-    if (step === 1 && !profileType) return;
-    if (step === 2 && !biggestProblem) return;
-    if (step === 3 && !dailyGoal) return;
+  const isDisabled = step === 1 ? selectedChallenges.length === 0 : !goal;
 
-    if (step < 3) {
-      setStep(step + 1);
-    } else {
-      setOnboarding({
-        name: name || 'Demb Cadet',
-        profileType,
-        biggestProblem,
-        dailyGoal,
-      });
-      router.replace('/(tabs)');
-    }
+  const toggleChallenge = (id: Challenge) => {
+    setSelectedChallenges(current =>
+      current.includes(id) ? current.filter(item => item !== id) : [...current, id]
+    );
   };
 
   const handleBack = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    } else {
-      router.back();
+    if (step === 2) {
+      setStep(1);
+      return;
     }
+    router.back();
   };
 
-  // Render Onboarding steps
-  const renderStepContent = () => {
-    switch (step) {
-      case 1:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Who are we protecting today?</Text>
-            <Text style={[styles.stepSubtitle, { color: colors.textMuted }]}>
-              Enter your officer name and choose your primary daily role.
-            </Text>
-
-            {/* Name Input */}
-            <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Officer Alias</Text>
-              <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: isDark ? colors.surface : '#f2ebf6',
-                    color: colors.textPrimary,
-                    borderColor: isDark ? colors.outlineVariant : '#ffffff',
-                    borderWidth: isDark ? 1 : 2,
-                  },
-                ]}
-                placeholder="e.g. Sheriff Alex"
-                placeholderTextColor={colors.textMuted}
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
-
-            {/* Role Grid */}
-            <View style={styles.gridContainer}>
-              {[
-                { type: 'student' as ProfileType, label: 'Student', icon: 'school-outline' },
-                { type: 'employee' as ProfileType, label: 'Employee', icon: 'briefcase-outline' },
-                { type: 'entrepreneur' as ProfileType, label: 'Entrepreneur', icon: 'trending-up-outline' },
-                { type: 'parent' as ProfileType, label: 'Parent', icon: 'people-outline' },
-              ].map(item => {
-                const isSelected = profileType === item.type;
-                return (
-                  <NeomorphicCard
-                    key={item.type}
-                    onPress={() => setProfileType(item.type)}
-                    style={[
-                      styles.roleCard,
-                      isSelected && { borderColor: colors.primary, borderWidth: 2.5 },
-                    ]}
-                    bgColor={isSelected ? (isDark ? '#3d256d' : '#e8ddff') : undefined}
-                  >
-                    <Ionicons
-                      name={item.icon as any}
-                      size={28}
-                      color={isSelected ? colors.primary : colors.textSecondary}
-                    />
-                    <Text
-                      style={[
-                        styles.roleText,
-                        { color: isSelected ? colors.primary : colors.textPrimary },
-                        isSelected && { fontWeight: '700' },
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </NeomorphicCard>
-                );
-              })}
-            </View>
-          </View>
-        );
-      case 2:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>What drains your focus?</Text>
-            <Text style={[styles.stepSubtitle, { color: colors.textMuted }]}>
-              Identify your biggest daily struggle to configure focus alarms.
-            </Text>
-
-            <View style={styles.optionsList}>
-              {[
-                'Too much screen time',
-                'Burnout & high stress',
-                'Poor sleep patterns',
-                'Lack of daily motivation',
-              ].map(option => {
-                const isSelected = biggestProblem === option;
-                return (
-                  <NeomorphicCard
-                    key={option}
-                    onPress={() => setBiggestProblem(option)}
-                    style={[
-                      styles.optionCard,
-                      isSelected && { borderColor: colors.primary, borderWidth: 2.5 }
-                    ]}
-                    bgColor={isSelected ? (isDark ? '#3d256d' : '#e8ddff') : undefined}
-                  >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        { color: isSelected ? colors.primary : colors.textPrimary },
-                        isSelected && { fontWeight: '700' },
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                    {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                    ) : (
-                      <View style={[styles.unselectedIndicator, { borderColor: colors.outlineVariant }]} />
-                    )}
-                  </NeomorphicCard>
-                );
-              })}
-            </View>
-          </View>
-        );
-      case 3:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Set daily recovery goal</Text>
-            <Text style={[styles.stepSubtitle, { color: colors.textMuted }]}>
-              How much intentional offline recovery will you commit to each day?
-            </Text>
-
-            <View style={styles.goalsContainer}>
-              {[
-                { value: '15 mins', label: 'Balanced Guard', desc: 'Perfect for busy schedules. Quick recovery breaks.' },
-                { value: '30 mins', label: 'Recovery Sheriff', desc: 'Recommended. Ideal balance of focus & relaxation.' },
-                { value: '60 mins', label: 'Serenity Master', desc: 'Complete health balance. Maximum screen downtime.' },
-              ].map(goal => {
-                const isSelected = dailyGoal === goal.value;
-                return (
-                  <NeomorphicCard
-                    key={goal.value}
-                    onPress={() => setDailyGoal(goal.value)}
-                    style={[
-                      styles.goalCard,
-                      isSelected && { borderColor: colors.primary, borderWidth: 2.5 },
-                    ]}
-                    bgColor={isSelected ? (isDark ? '#3d256d' : '#e8ddff') : undefined}
-                  >
-                    <View style={styles.goalHeader}>
-                      <Text style={[styles.goalValue, { color: colors.primary }]}>{goal.value}</Text>
-                      <Text style={[styles.goalLabel, { color: colors.textPrimary, fontWeight: isSelected ? '700' : '500' }]}>{goal.label}</Text>
-                    </View>
-                    <Text style={[styles.goalDesc, { color: colors.textSecondary }]}>{goal.desc}</Text>
-                  </NeomorphicCard>
-                );
-              })}
-            </View>
-          </View>
-        );
-      default:
-        return null;
+  const handleNext = () => {
+    if (step === 1) {
+      if (selectedChallenges.length === 0) return;
+      setStep(2);
+      return;
     }
-  };
 
-  const isNextDisabled = 
-    (step === 1 && !profileType) ||
-    (step === 2 && !biggestProblem) ||
-    (step === 3 && !dailyGoal);
+    if (!goal) return;
+    setOnboarding({
+      name: 'Demb Cadet',
+      profileType: 'other',
+      biggestProblem: selectedChallenges.join(', '),
+      dailyGoal: goal,
+    });
+    router.replace('/(tabs)');
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Background aurora */}
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-        <Animated.View 
-          style={[
-            styles.blurBlob, 
-            { 
-              backgroundColor: isDark ? '#3d256d' : '#e8ddff',
-              top: '20%', 
-              right: '-10%',
-              transform: [{ translateX: transX }, { translateY: transY }] 
-            }
-          ]} 
-        />
+    <View style={styles.container}>
+      <Animated.View style={[styles.backgroundGlow, { transform: [{ translateY: glowY }] }]} />
+
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 18, 34) }]}>
+        <Pressable onPress={handleBack} style={styles.headerIcon}>
+          <Ionicons name="arrow-back" size={24} color="#25232C" />
+        </Pressable>
+        <Text style={styles.logoText}>Demb</Text>
+        <Text style={styles.stepText}>Step {step} of 2</Text>
       </View>
 
-      <View style={[styles.contentContainer, { paddingTop: insets.top + Spacing.two, paddingBottom: insets.bottom + Spacing.four }]}>
-        {/* Onboarding Header */}
-        <View style={styles.header}>
-          <Pressable onPress={handleBack} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
+      <ScrollView
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.scrollContent,
+          step === 1 ? styles.stepOneScroll : styles.stepTwoScroll,
+        ]}
+      >
+        <View style={styles.intro}>
+          <Text style={styles.title}>
+            {step === 1 ? 'What would you like help with?' : 'What would you like to improve?'}
+          </Text>
+          <Text style={styles.subtitle}>
+            {step === 1 ? 'Pick one or more challenges.' : 'Choose your recovery goal.'}
+          </Text>
+        </View>
 
-          <Image
-            source={require('../../assets/images/logo.jpg')}
-            style={styles.smallLogo}
-            contentFit="cover"
-          />
-
-          {/* Progress Dots */}
-          <View style={styles.dotsContainer}>
-            {[1, 2, 3].map(i => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: i === step ? colors.primary : colors.outlineVariant,
-                    width: i === step ? 18 : 8,
-                  },
-                ]}
-              />
-            ))}
+        {step === 1 ? (
+          <View style={styles.challengeGrid}>
+            {challenges.map(item => {
+              const isSelected = selectedChallenges.includes(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => toggleChallenge(item.id)}
+                  style={[styles.challengeCard, isSelected && styles.challengeCardSelected]}
+                >
+                  <View style={[styles.challengeIcon, isSelected && styles.iconSelected]}>
+                    <Ionicons name={item.icon as any} size={24} color={item.color} />
+                  </View>
+                  <Text style={styles.challengeText}>{item.label}</Text>
+                  <View style={[styles.checkBubble, isSelected && styles.checkBubbleSelected]}>
+                    {isSelected && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
-        </View>
+        ) : (
+          <View style={styles.goalList}>
+            {goals.map(item => {
+              const isSelected = goal === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => setGoal(item.id)}
+                  style={[styles.goalCard, isSelected && styles.goalCardSelected]}
+                >
+                  <View style={[styles.goalIcon, isSelected && styles.goalIconSelected]}>
+                    <Ionicons name={item.icon as any} size={26} color="#222127" />
+                  </View>
+                  <View style={styles.goalCopy}>
+                    <Text style={styles.goalTitle}>{item.title}</Text>
+                    <Text style={styles.goalSubtitle}>{item.subtitle}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
 
-        {/* Onboarding Pages */}
-        <View style={styles.content}>{renderStepContent()}</View>
-
-        {/* Bottom Nav / Continue Button */}
-        <View style={styles.footer}>
-          <NeomorphicCard
-            onPress={handleNext}
-            style={[
-              styles.continueButton,
-              { backgroundColor: colors.primary },
-              isNextDisabled && { opacity: 0.5 }
-            ]}
-            bgColor={colors.primary}
-            disabled={isNextDisabled}
-          >
-            <Text style={[styles.continueButtonText, { color: colors.onPrimary }]}>
-              {step === 3 ? "Let's Go!" : 'Continue'}
-            </Text>
-          </NeomorphicCard>
-        </View>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}>
+        {step === 1 && (
+          <View style={styles.progressRow}>
+            <View style={[styles.progressPill, styles.progressActive]} />
+            <View style={styles.progressPill} />
+          </View>
+        )}
+        <Pressable
+          disabled={isDisabled}
+          onPress={handleNext}
+          style={[styles.continueButton, isDisabled && styles.continueDisabled]}
+        >
+          <Text style={styles.continueText}>{step === 1 ? 'Continue' : 'Create My Recovery Plan'}</Text>
+        </Pressable>
+        {step === 2 && <Text style={styles.footerHint}>You can update your goals anytime.</Text>}
       </View>
     </View>
   );
@@ -317,155 +188,237 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FBF9FA',
+    overflow: 'hidden',
   },
-  contentContainer: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    justifyContent: 'space-between',
-  },
-  blurBlob: {
+  backgroundGlow: {
     position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    opacity: 0.35,
+    top: 126,
+    right: -150,
+    width: 290,
+    height: 430,
+    borderRadius: 145,
+    backgroundColor: 'rgba(233, 224, 255, 0.58)',
+    shadowColor: '#A78BFA',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 42,
   },
   header: {
+    minHeight: 96,
+    paddingHorizontal: 24,
+    paddingBottom: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.three,
   },
-  backButton: {
-    width: 44,
+  headerIcon: {
+    width: 50,
     height: 44,
-    borderRadius: Radius.md,
-    alignItems: 'center',
     justifyContent: 'center',
   },
-  smallLogo: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.md,
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  dot: {
-    height: 8,
-    borderRadius: Radius.full,
-  },
-  content: {
+  logoText: {
     flex: 1,
-    justifyContent: 'center',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-  },
-  stepTitle: {
-    fontSize: 26,
+    color: '#656074',
+    fontSize: 25,
+    lineHeight: 30,
     fontWeight: '800',
-    letterSpacing: -1,
-    lineHeight: 32,
+    textAlign: 'center',
   },
-  stepSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: Spacing.two,
-  },
-  inputContainer: {
-    gap: Spacing.one,
-  },
-  inputLabel: {
-    fontSize: 13,
+  stepText: {
+    width: 92,
+    color: '#656074',
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    textAlign: 'right',
   },
-  textInput: {
-    height: 56,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.three,
-    fontSize: 16,
-    ...Shadows.glow('#00000005'),
+  scrollContent: {
+    paddingHorizontal: 24,
   },
-  gridContainer: {
+  stepOneScroll: {
+    paddingTop: 18,
+    paddingBottom: 16,
+  },
+  stepTwoScroll: {
+    paddingTop: 18,
+    paddingBottom: 18,
+  },
+  intro: {
+    marginBottom: 24,
+  },
+  title: {
+    color: '#202025',
+    fontSize: 29,
+    lineHeight: 36,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  subtitle: {
+    color: '#777181',
+    fontSize: 17,
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  challengeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.two,
-    marginTop: Spacing.one,
-  },
-  roleCard: {
-    width: '47%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.two,
-    padding: Spacing.three,
-  },
-  roleText: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  optionsList: {
-    gap: Spacing.two,
-  },
-  optionCard: {
-    flexDirection: 'row',
-    height: 64,
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.three,
+    rowGap: 14,
   },
-  optionText: {
-    fontSize: 16,
-    fontWeight: '500',
+  challengeCard: {
+    width: '48%',
+    minHeight: 132,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#ECE9EF',
+    padding: 16,
+    justifyContent: 'space-between',
+    shadowColor: '#D8D3DE',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
   },
-  unselectedIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
+  challengeCardSelected: {
+    backgroundColor: '#EAE2FF',
+    borderColor: '#D8CCFF',
+    shadowColor: '#BCA9FF',
+    shadowOpacity: 0.26,
   },
-  goalsContainer: {
-    gap: Spacing.two,
+  challengeIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#F5F3F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconSelected: {
+    backgroundColor: '#F6F2FF',
+  },
+  challengeText: {
+    color: '#252329',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
+    paddingRight: 8,
+  },
+  checkBubble: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: '#E1DDE7',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkBubbleSelected: {
+    borderColor: '#6C63FF',
+    backgroundColor: '#6C63FF',
+  },
+  goalList: {
+    gap: 14,
   },
   goalCard: {
-    gap: Spacing.one,
-    padding: Spacing.three,
-  },
-  goalHeader: {
+    minHeight: 112,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#ECE9EF',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    shadowColor: '#D8D3DE',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 22,
   },
-  goalValue: {
+  goalCardSelected: {
+    backgroundColor: '#E8E0FF',
+    borderColor: '#E3D8FF',
+  },
+  goalIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EDE6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 18,
+  },
+  goalIconSelected: {
+    backgroundColor: '#EFE9FF',
+  },
+  goalCopy: {
+    flex: 1,
+  },
+  goalTitle: {
+    color: '#202025',
     fontSize: 18,
+    lineHeight: 23,
     fontWeight: '800',
+    marginBottom: 8,
   },
-  goalLabel: {
-    fontSize: 14,
-  },
-  goalDesc: {
-    fontSize: 13,
-    lineHeight: 18,
+  goalSubtitle: {
+    color: '#57515F',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   footer: {
-    marginTop: Spacing.three,
-    width: '100%',
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    backgroundColor: '#FBF9FA',
   },
-  continueButton: {
-    height: 56,
-    borderRadius: Radius.full,
+  progressRow: {
+    height: 18,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 0,
-    borderWidth: 0,
+    gap: 6,
+    marginBottom: 14,
   },
-  continueButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  progressPill: {
+    width: 31,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#DFDDE2',
+  },
+  progressActive: {
+    backgroundColor: '#655F78',
+  },
+  continueButton: {
+    height: 64,
+    borderRadius: 28,
+    backgroundColor: '#E8DFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#C9B7FF',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.25,
+    shadowRadius: 26,
+  },
+  continueDisabled: {
+    opacity: 0.48,
+  },
+  continueText: {
+    color: '#4B455F',
+    fontSize: 18,
+    lineHeight: 23,
+    fontWeight: '800',
+  },
+  footerHint: {
+    color: '#57515F',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 16,
   },
 });
