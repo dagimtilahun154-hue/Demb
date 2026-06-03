@@ -17,7 +17,24 @@ export default function DashboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const float = React.useRef(new Animated.Value(0)).current;
-  const { user, balance, streakCount, buddies, completedMissions, points, missions } = useAppStore();
+  
+  const { 
+    user, 
+    balance, 
+    streakCount, 
+    buddies, 
+    completedMissions, 
+    points, 
+    missions,
+    breakLoopActive,
+    breakLoopTime,
+    toggleBreakLoop,
+    tickBreakLoop,
+    fetchOnlineBuddyUpdates,
+    socialUsage,
+    checkSystemLocks,
+    logManualSocialUsage
+  } = useAppStore();
 
   React.useEffect(() => {
     Animated.loop(
@@ -36,10 +53,51 @@ export default function DashboardScreen() {
     ).start();
   }, [float]);
 
+  // Handle continuous break loop counting
+  React.useEffect(() => {
+    let interval: any;
+    if (breakLoopActive) {
+      interval = setInterval(() => {
+        tickBreakLoop();
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [breakLoopActive]);
+
+  // Online Buddy system updates
+  React.useEffect(() => {
+    fetchOnlineBuddyUpdates();
+    const interval = setInterval(() => {
+      fetchOnlineBuddyUpdates();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Background System locks & Rate-Limit Monitor
+  React.useEffect(() => {
+    checkSystemLocks();
+    const interval = setInterval(() => {
+      checkSystemLocks();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   const floatY = float.interpolate({
     inputRange: [0, 1],
     outputRange: [0, -8],
   });
+
+  const formatStopwatch = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatMinutes = (mins: number) => {
+    const hrs = Math.floor(mins / 60);
+    const m = mins % 60;
+    return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
+  };
 
   const recoveryScore = Math.max(0, Math.min(100, Math.round(100 - balance.recoveryDebt * 0.4)));
   const state = recoveryScore >= 76 ? 'good' : recoveryScore >= 52 ? 'neutral' : 'bad';
@@ -52,6 +110,8 @@ export default function DashboardScreen() {
   const startMission = () => {
     router.push({ pathname: '/mission', params: { missionId: activeMission?.id ?? 'm1' } });
   };
+
+  const totalScreenTimeMins = socialUsage.TikTok + socialUsage.Instagram + socialUsage.YouTube + socialUsage.Snapchat + socialUsage.Facebook;
 
   return (
     <View style={styles.screen}>
@@ -90,40 +150,61 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.hero}>
-          <Pressable style={styles.breakLoopButton} onPress={startMission}>
-            <Text style={styles.breakLoopText}>BREAK LOOP</Text>
+          <Pressable 
+            style={[
+              styles.breakLoopButton,
+              breakLoopActive && { backgroundColor: '#6C63FF', borderColor: '#FFFFFF', shadowColor: '#6C63FF', shadowRadius: 36, shadowOpacity: 0.6 }
+            ]} 
+            onPress={toggleBreakLoop}
+          >
+            <Text style={[styles.breakLoopText, breakLoopActive && { color: '#FFFFFF' }]}>
+              {breakLoopActive ? 'STOP LOOP' : 'BREAK LOOP'}
+            </Text>
+            {breakLoopActive && (
+              <Text style={[styles.stopwatchText, { color: '#FFFFFF' }]}>{formatStopwatch(breakLoopTime)}</Text>
+            )}
           </Pressable>
 
-          <Animated.View style={[styles.characterBadge, { transform: [{ translateY: floatY }] }]}>
-            <View style={styles.characterAura} />
-            <Image source={characterByState[state]} style={styles.characterImage} contentFit="contain" />
-          </Animated.View>
-
-          <Text style={styles.heroCaption}>Start a recovery session now.</Text>
+          <Text style={styles.heroCaption}>
+            {breakLoopActive ? 'Patrolling digital loop... Keep going!' : 'Start a recovery session now.'}
+          </Text>
         </View>
 
-        <View style={styles.scoreCard}>
-          <View style={styles.scoreTop}>
-            <View>
-              <Text style={styles.cardLabel}>Recovery Score</Text>
-              <View style={styles.scoreRow}>
-                <Text style={styles.scoreValue}>{recoveryScore}%</Text>
-                <View style={styles.scorePill}>
-                  <Text style={styles.scorePillText}>{stateLabel}</Text>
+        <View style={styles.scoreCardContainer}>
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreTop}>
+              <View>
+                <Text style={styles.cardLabel}>Recovery Score</Text>
+                <View style={styles.scoreRow}>
+                  <Text style={styles.scoreValue}>{recoveryScore}%</Text>
+                  <View style={styles.scorePill}>
+                    <Text style={styles.scorePillText}>{stateLabel}</Text>
+                  </View>
                 </View>
+              </View>
+
+              <View style={styles.ring}>
+                <Ionicons name="refresh-outline" size={31} color="#746D87" />
               </View>
             </View>
 
-            <View style={styles.ring}>
-              <Ionicons name="refresh-outline" size={31} color="#746D87" />
+            <View style={styles.cardDivider} />
+            <View style={styles.scoreTrend}>
+              <Ionicons name="trending-up-outline" size={15} color="#746D87" />
+              <Text style={styles.trendText}>{stateCopy}</Text>
             </View>
           </View>
 
-          <View style={styles.cardDivider} />
-          <View style={styles.scoreTrend}>
-            <Ionicons name="trending-up-outline" size={15} color="#746D87" />
-            <Text style={styles.trendText}>{stateCopy}</Text>
-          </View>
+          {/* Floating Smiling Character overlay when score is > 80 */}
+          {recoveryScore >= 80 && (
+            <Animated.View style={[styles.floatingScoreCharacter, { transform: [{ translateY: floatY }] }]}>
+              <Image 
+                source={require('../../../assets/images/demb-happy.png')} 
+                style={styles.floatingCharacterImage} 
+                contentFit="contain" 
+              />
+            </Animated.View>
+          )}
         </View>
 
         <View style={styles.statsRow}>
@@ -164,12 +245,14 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.screenTimeRow}>
-            <Text style={styles.screenTime}>3h 20m</Text>
+            <Text style={styles.screenTime}>{formatMinutes(totalScreenTimeMins)}</Text>
             <Text style={styles.screenTimeLabel}>Screen Time</Text>
           </View>
 
-          <UsageRow icon="videocam-outline" app="TikTok" time="1h 40m" />
-          <UsageRow icon="camera-outline" app="Instagram" time="45m" />
+          <UsageRow icon="videocam-outline" app="TikTok" time={formatMinutes(socialUsage.TikTok)} />
+          <UsageRow icon="camera-outline" app="Instagram" time={formatMinutes(socialUsage.Instagram)} />
+          <UsageRow icon="logo-youtube" app="YouTube" time={formatMinutes(socialUsage.YouTube)} />
+          <UsageRow icon="chatbubble-ellipses-outline" app="Snapchat" time={formatMinutes(socialUsage.Snapchat)} />
 
           <View style={styles.insightBox}>
             <Text style={styles.insightText}>Social time is running high. A quick recovery break can help.</Text>
@@ -329,15 +412,15 @@ const styles = StyleSheet.create({
     borderRadius: 17,
   },
   hero: {
-    height: 300,
+    height: 270,
     alignItems: 'center',
     justifyContent: 'flex-start',
     marginBottom: 22,
   },
   breakLoopButton: {
-    width: 174,
-    height: 174,
-    borderRadius: 87,
+    width: 210,
+    height: 210,
+    borderRadius: 105,
     backgroundColor: '#E7DFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -350,18 +433,56 @@ const styles = StyleSheet.create({
   },
   breakLoopText: {
     color: '#6D6879',
-    fontSize: 21,
-    lineHeight: 25,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '900',
+    textAlign: 'center',
   },
-  characterBadge: {
+  stopwatchText: {
+    color: '#343039',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  scoreCardContainer: {
+    position: 'relative',
+    width: '100%',
+  },
+  floatingScoreCharacter: {
     position: 'absolute',
-    right: 6,
-    top: 42,
-    width: 116,
-    height: 128,
+    left: 2,
+    top: -100,
+    width: 160,
+    height: 170,
+    zIndex: 999,
+    elevation: 10,
+  },
+  floatingCharacterImage: {
+    width: '100%',
+    height: '100%',
+  },
+  simRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 12,
+  },
+  simButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F0EEF1',
+    borderWidth: 1,
+    borderColor: '#ECEAEF',
+    gap: 4,
+  },
+  simButtonText: {
+    color: '#6C63FF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   characterAura: {
     position: 'absolute',

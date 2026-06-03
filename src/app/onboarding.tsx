@@ -82,11 +82,22 @@ export default function OnboardingScreen() {
     }
 
     if (!goal) return;
+    
+    let intensity: 'low' | 'medium' | 'high' = 'medium';
+    if (selectedChallenges.includes('scroll') && selectedChallenges.includes('sleep')) {
+      intensity = 'high';
+    } else if (selectedChallenges.length >= 3) {
+      intensity = 'high';
+    } else if (selectedChallenges.length === 1) {
+      intensity = 'low';
+    }
+
     setOnboarding({
       name: 'Demb Cadet',
       profileType: 'other',
       biggestProblem: selectedChallenges.join(', '),
       dailyGoal: goal,
+      recoveryIntensity: intensity,
     });
     router.replace('/(tabs)');
   };

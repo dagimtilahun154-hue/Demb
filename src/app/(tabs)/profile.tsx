@@ -18,6 +18,7 @@ export default function ProfileScreen() {
     points,
     streakCount,
     resetAllData,
+    setOnboarding,
   } = useAppStore();
 
   const bounceAnim = React.useRef(new Animated.Value(0)).current;
@@ -166,6 +167,42 @@ export default function ProfileScreen() {
             </NeomorphicCard>
           ))}
         </View>
+
+        {/* Recovery Intensity Panel */}
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recovery Intensity Settings</Text>
+        <NeomorphicCard style={styles.settingsCard} bgColor={colors.surface}>
+          <View style={styles.intensitySettingRow}>
+            <Text style={[styles.intensityLabel, { color: colors.textSecondary }]}>CALIBRATE SYSTEM:</Text>
+            <View style={styles.intensityPills}>
+              {['low', 'medium', 'high'].map((level) => {
+                const isSelected = user.recoveryIntensity === level;
+                return (
+                  <Pressable
+                    key={level}
+                    onPress={() => {
+                      setOnboarding({ recoveryIntensity: level as any });
+                      Alert.alert("System Recalibrated", `Recovery intensity set to ${level.toUpperCase()}. Limits updated.`);
+                    }}
+                    style={[
+                      styles.intensityPill,
+                      { backgroundColor: isDark ? colors.surfaceContainer : '#F5F4F7' },
+                      isSelected && { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    <Text 
+                      style={[
+                        styles.intensityPillText, 
+                        { color: isSelected ? '#FFF' : colors.textPrimary }
+                      ]}
+                    >
+                      {level.toUpperCase()}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </NeomorphicCard>
 
         {/* Settings / Actions */}
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Settings</Text>
@@ -352,5 +389,33 @@ const styles = StyleSheet.create({
   },
   rowPressed: {
     opacity: 0.7,
+  },
+  intensitySettingRow: {
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  intensityLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  intensityPills: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  intensityPill: {
+    flex: 1,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  intensityPillText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

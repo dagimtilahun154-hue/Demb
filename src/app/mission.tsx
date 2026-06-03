@@ -9,6 +9,37 @@ import Svg, { Circle } from 'react-native-svg';
 import { Image } from 'expo-image';
 import NeomorphicCard from '@/components/NeomorphicCard';
 
+// Dynamic sensor imports for crash safety
+let Pedometer: any = null;
+try {
+  Pedometer = require('expo-sensors').Pedometer;
+} catch (e) {
+  console.log('expo-sensors Pedometer not loaded', e);
+}
+
+let Location: any = null;
+try {
+  Location = require('expo-location');
+} catch (e) {
+  console.log('expo-location not loaded', e);
+}
+
+// Haversine distance calculator in meters
+function getHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // Earth radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // in meters
+}
+
 export default function MissionTimerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -35,7 +66,8 @@ export default function MissionTimerScreen() {
   } = useAppStore();
 
   const [isFinished, setIsFinished] = useState(false);
-  const [activeTab, setActiveTab] = useState<'Left' | 'Right'>('Left');
+  const [gpsDistance, setGpsDistance] = useState(0);
+  const [usingSimulation, setUsingSimulation] = useState(false);
   const appState = useRef(AppState.currentState);
 
   const missionId = (params.missionId as string) || 'm1';
@@ -46,8 +78,6 @@ export default function MissionTimerScreen() {
     startMission(mission.id);
     
     if (mission.id === 'm3') {
-      // Phone Lockup screen-off detox
-      // Set target to 20 seconds for interactive demo purposes so it is easily evaluated!
       startScreenOffDetox(20); 
     }
 
@@ -64,7 +94,6 @@ export default function MissionTimerScreen() {
       if (missionTimeLeft <= 1) {
         setIsFinished(true);
         completeMission();
-        clearInterval(interval);
       } else {
         tickMission();
       }
@@ -82,7 +111,6 @@ export default function MissionTimerScreen() {
         appState.current.match(/active/) &&
         (nextAppState === 'inactive' || nextAppState === 'background')
       ) {
-        // App went to background (Screen Locked / Home pressed)
         registerScreenOff();
       }
 
@@ -90,7 +118,6 @@ export default function MissionTimerScreen() {
         appState.current.match(/inactive|background/) &&
         nextAppState === 'active'
       ) {
-        // App returned to active (Screen Unlocked)
         const check = verifyScreenOff();
         if (check.success) {
           setIsFinished(true);
@@ -104,12 +131,141 @@ export default function MissionTimerScreen() {
     return () => subscription.remove();
   }, [isFinished]);
 
-  // Tap-based physical walk simulator action
-  const handleFootTap = (foot: 'Left' | 'Right') => {
-    if (foot !== activeTab) return;
-    incrementSteps(4); // 4 steps per alternating stride!
-    setActiveTab(foot === 'Left' ? 'Right' : 'Left');
-  };
+  // Real GPS & Location tracking
+  useEffect(() => {
+    if (mission.id !== 'm2' || isFinished) return;
+
+    let locationSubscription: any = null;
+
+    const startGPS = async () => {
+      try {
+        if (Location) {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            let lastCoords: { latitude: number; longitude: number } | null = null;
+            let totalDistance = 0;
+            
+            locationSubscription = await Location.watchPositionAsync(
+              {
+                accuracy: Location.Accuracy.High,
+                timeInterval: 2000,
+                distanceInterval: 1,
+              },
+              (pos: any) => {
+                const currentCoords = pos.coords;
+                if (lastCoords) {
+                  const d = getHaversineDistance(
+                    lastCoords.latitude,
+                    lastCoords.longitude,
+                    currentCoords.latitude,
+                    currentCoords.longitude
+                  );
+                  if (d > 0.3) { // filter noise
+                    totalDistance += d;
+                    setGpsDistance(Math.round(totalDistance));
+                    
+                    // Auto-complete if user covers 10m and logs 50 steps
+                    const store = useAppStore.getState();
+                    if (totalDistance >= 10 && store.stepsWalked >= 50) {
+                      setIsFinished(true);
+                      completeMission();
+                    }
+                  }
+                }
+                lastCoords = currentCoords;
+              }
+            );
+          } else {
+            console.log('[GPS] Permission denied, enabling simulation');
+            setUsingSimulation(true);
+          }
+        } else {
+          setUsingSimulation(true);
+        }
+      } catch (err) {
+        console.warn('GPS location tracking failed to start', err);
+        setUsingSimulation(true);
+      }
+    };
+
+    startGPS();
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, [mission.id, isFinished]);
+
+  // Real Pedometer hardware step updates & fallbacks
+  useEffect(() => {
+    if (mission.id !== 'm2' || isFinished) return;
+
+    let subscription: any = null;
+
+    const startPedometer = async () => {
+      try {
+        if (Pedometer) {
+          const available = await Pedometer.isAvailableAsync();
+          if (available) {
+            let initialSteps: number | null = null;
+            subscription = Pedometer.watchStepCount((result: any) => {
+              if (initialSteps === null) {
+                initialSteps = result.steps;
+              }
+              const diff = result.steps - initialSteps;
+              if (diff > 0) {
+                incrementSteps(diff);
+                initialSteps = result.steps;
+              }
+              
+              // Verify completions
+              const store = useAppStore.getState();
+              if (gpsDistance >= 10 && store.stepsWalked + diff >= 50) {
+                setIsFinished(true);
+                completeMission();
+              }
+            });
+          } else {
+            setUsingSimulation(true);
+          }
+        } else {
+          setUsingSimulation(true);
+        }
+      } catch (err) {
+        console.warn('Pedometer sensor failed to start', err);
+        setUsingSimulation(true);
+      }
+    };
+
+    startPedometer();
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, [mission.id, isFinished, gpsDistance]);
+
+  // Simulated coordinate/steps increments if hardware unavailable
+  useEffect(() => {
+    if (mission.id !== 'm2' || isFinished || !usingSimulation) return;
+
+    const simulatedInterval = setInterval(() => {
+      incrementSteps(4);
+      setGpsDistance(prev => {
+        const next = prev + 1;
+        // Complete walk when user reaches 10m and 50 steps
+        const store = useAppStore.getState();
+        if (next >= 10 && store.stepsWalked >= 50) {
+          setIsFinished(true);
+          completeMission();
+        }
+        return next;
+      });
+    }, 1500);
+
+    return () => clearInterval(simulatedInterval);
+  }, [mission.id, isFinished, usingSimulation]);
 
   const handleCancel = () => {
     cancelMission();
@@ -186,7 +342,7 @@ export default function MissionTimerScreen() {
       {/* Main Panel Content */}
       <View style={styles.mainContent}>
         {mission.id === 'm2' ? (
-          // ─── NATURE WALK MISSION (Tactile Alternate Tap & Shake Sim) ───
+          // ─── NATURE WALK MISSION (GPS & Pedometer Real Sensors) ───
           <View style={styles.taskSection}>
             <Image
               source={require('../../assets/images/demb_progress.png')}
@@ -195,36 +351,31 @@ export default function MissionTimerScreen() {
             />
             <Text style={[styles.taskTitle, { color: colors.textPrimary }]}>Nature Walk Patrol</Text>
             <Text style={[styles.taskDesc, { color: colors.textSecondary }]}>
-              Officer Demb requires physical motion. Walk or alternate your steps using the tactile pads below!
+              Officer Demb requires physical motion. Walk around to update steps and GPS distance!
             </Text>
 
             {/* Step Gauge */}
             <View style={styles.stepGaugeWrapper}>
-              <Text style={[styles.stepGaugeLabel, { color: colors.primary }]}>{stepsWalked} / 100 STEPS</Text>
+              <Text style={[styles.stepGaugeLabel, { color: colors.primary }]}>{stepsWalked} / 50 STEPS</Text>
               <View style={[styles.progressBar, { backgroundColor: colors.surfaceContainer }]}>
-                <View style={[styles.progressBarFill, { backgroundColor: colors.primary, width: `${Math.min(100, stepsWalked)}%` }]} />
+                <View style={[styles.progressBarFill, { backgroundColor: colors.primary, width: `${Math.min(100, (stepsWalked / 50) * 100)}%` }]} />
               </View>
             </View>
 
-            {/* Alternating Foot Tapping Pads */}
-            <View style={styles.stepPadsRow}>
-              <NeomorphicCard
-                onPress={() => handleFootTap('Left')}
-                style={[styles.footPad, activeTab !== 'Left' && { opacity: 0.4 }]}
-                bgColor={activeTab === 'Left' ? colors.primaryContainer : undefined}
-              >
-                <Ionicons name="walk" size={32} color={activeTab === 'Left' ? colors.primary : colors.textMuted} />
-                <Text style={[styles.footText, { color: activeTab === 'Left' ? colors.primary : colors.textMuted }]}>LEFT FOOT</Text>
-              </NeomorphicCard>
+            {/* GPS Distance Gauge */}
+            <View style={styles.stepGaugeWrapper}>
+              <Text style={[styles.stepGaugeLabel, { color: colors.secondary }]}>{gpsDistance} / 10 METERS</Text>
+              <View style={[styles.progressBar, { backgroundColor: colors.surfaceContainer }]}>
+                <View style={[styles.progressBarFill, { backgroundColor: colors.secondary, width: `${Math.min(100, (gpsDistance / 10) * 100)}%` }]} />
+              </View>
+            </View>
 
-              <NeomorphicCard
-                onPress={() => handleFootTap('Right')}
-                style={[styles.footPad, activeTab !== 'Right' && { opacity: 0.4 }]}
-                bgColor={activeTab === 'Right' ? colors.primaryContainer : undefined}
-              >
-                <Ionicons name="walk" size={32} color={activeTab === 'Right' ? colors.primary : colors.textMuted} transform={[{ scaleX: -1 }]} />
-                <Text style={[styles.footText, { color: activeTab === 'Right' ? colors.primary : colors.textMuted }]}>RIGHT FOOT</Text>
-              </NeomorphicCard>
+            {/* Live State Observer Pill */}
+            <View style={styles.screenStatePill}>
+              <View style={[styles.liveDot, { backgroundColor: usingSimulation ? '#F59E0B' : '#22C55E' }]} />
+              <Text style={[styles.liveStateText, { color: usingSimulation ? '#F59E0B' : '#22C55E' }]}>
+                {usingSimulation ? 'Demo Mode (Mocking Sensors)' : 'Tracking GPS & Steps Sensors Live'}
+              </Text>
             </View>
           </View>
         ) : mission.id === 'm3' ? (

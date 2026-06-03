@@ -1,5 +1,21 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { 
+  initDb, 
+  saveDbUser, 
+  getDbUser, 
+  addDbLog, 
+  deleteDbLog, 
+  getDbLogs, 
+  addDbCompletedMission, 
+  getDbCompletedMissions,
+  queueSyncItem,
+  getSyncQueue,
+  removeSyncItems,
+  addSocialUsageLog,
+  getSocialUsageLogs,
+  pruneOldSocialLogs
+} from './db';
 
 export interface EnergyLog {
   id: string;
@@ -20,6 +36,7 @@ export interface UserProfile {
   biggestProblem: string;
   dailyGoal: string;
   isOnboarded: boolean;
+  recoveryIntensity: 'low' | 'medium' | 'high';
 }
 
 export interface DailyBalance {
@@ -101,17 +118,34 @@ export interface AppState {
   screenOffTargetDuration: number; // seconds
   screenOffInterrupted: boolean;
   
+  // Break Loop Timer
+  breakLoopActive: boolean;
+  breakLoopTime: number; // in seconds
+  
   // Missions
   missions: RecoveryMission[];
   completedMissions: string[]; // ids of completed missions
   
-  // App Modes / Simulation
+  // App Modes / Locks
   focusLockActive: boolean;
-  restrictedApp: string;
+  restrictedApp: string; // e.g. 'TikTok', 'Instagram', 'Sleep Lockout'
   focusLockTimeLeft: number; // seconds
   currentActiveMission: RecoveryMission | null;
   missionTimeLeft: number; // seconds
   syncStatus: 'synced' | 'pending_sync' | 'syncing';
+  
+  // Advanced Blocker State
+  isTimeTampered: boolean;
+  lastKnownTime: number; // For detecting system clock changes
+  
+  // Social Media Real Data
+  socialUsage: {
+    TikTok: number; // minutes
+    Instagram: number; // minutes
+    YouTube: number; // minutes
+    Snapchat: number; // minutes
+    Facebook: number; // minutes
+  };
   
   // Actions
   setOnboarding: (profile: Partial<UserProfile>) => void;
@@ -125,11 +159,16 @@ export interface AppState {
   completeMission: () => void;
   cancelMission: () => void;
   
+  // Break Loop Actions
+  toggleBreakLoop: () => void;
+  tickBreakLoop: () => void;
+  
   // Buddy Actions
   sendBuddyRequest: (name: string) => void;
   acceptBuddyRequest: (requestId: string) => void;
   declineBuddyRequest: (requestId: string) => void;
   sendCheerToBuddy: (buddyName: string) => void;
+  fetchOnlineBuddyUpdates: () => Promise<void>;
   
   // Hardware & Screen Off Actions
   incrementSteps: (count: number) => void;
@@ -137,11 +176,15 @@ export interface AppState {
   registerScreenOff: () => void;
   verifyScreenOff: () => { success: boolean; elapsedSeconds: number };
   
-  // Focus Lock Simulation Actions
+  // Focus Lock / Blocker Actions
   triggerFocusLock: (appName: string, durationSeconds?: number) => void;
   tickFocusLock: () => void;
   extendFocusLock: (seconds: number) => void;
   releaseFocusLock: () => void;
+  
+  // System Monitor Ticks
+  checkSystemLocks: () => void;
+  logManualSocialUsage: (app: string, minutes: number) => Promise<void>;
   
   // Sync
   triggerSync: () => void;
@@ -159,7 +202,7 @@ const DEFAULT_MISSIONS: RecoveryMission[] = [
     verificationType: 'timer',
     recoveryValue: 15,
     icon: 'hourglass-outline',
-    bgColor: '#ece6f0', // soft purple
+    bgColor: '#ece6f0',
   },
   {
     id: 'm2',
@@ -170,7 +213,7 @@ const DEFAULT_MISSIONS: RecoveryMission[] = [
     verificationType: 'timer',
     recoveryValue: 30,
     icon: 'walk-outline',
-    bgColor: '#a6f2cf', // soft green
+    bgColor: '#a6f2cf',
   },
   {
     id: 'm3',
@@ -181,7 +224,7 @@ const DEFAULT_MISSIONS: RecoveryMission[] = [
     verificationType: 'timer',
     recoveryValue: 50,
     icon: 'lock-closed-outline',
-    bgColor: '#ffdad6', // soft peach/red
+    bgColor: '#ffdad6',
   },
   {
     id: 'm4',
@@ -192,7 +235,7 @@ const DEFAULT_MISSIONS: RecoveryMission[] = [
     verificationType: 'timer',
     recoveryValue: 20,
     icon: 'body-outline',
-    bgColor: '#ffdcbd', // soft orange
+    bgColor: '#ffdcbd',
   },
   {
     id: 'm5',
@@ -203,7 +246,7 @@ const DEFAULT_MISSIONS: RecoveryMission[] = [
     verificationType: 'timer',
     recoveryValue: 8,
     icon: 'water-outline',
-    bgColor: '#e8ddff', // light purple-blue
+    bgColor: '#e8ddff',
   }
 ];
 
@@ -214,20 +257,20 @@ const initialProfile: UserProfile = {
   biggestProblem: '',
   dailyGoal: '',
   isOnboarded: false,
+  recoveryIntensity: 'medium',
 };
 
 const initialBalance: DailyBalance = {
-  energySpent: 87, // Match design mockup initial state
-  energyRecovered: 41, // Match design mockup initial state
-  balanceScore: -46, // 41 - 87
+  energySpent: 87,
+  energyRecovered: 41,
+  balanceScore: -46,
   recoveryDebt: 46,
   burnoutRisk: 'Moderate',
   focusLevel: 65,
 };
 
-// Calculate balance stats based on logs
 const recalculateBalance = (logs: EnergyLog[]): DailyBalance => {
-  let spent = 87; // seed values to match the default mockups
+  let spent = 87; // seed values
   let recovered = 41;
 
   logs.forEach(log => {
@@ -262,7 +305,6 @@ const STORAGE_KEY = '@demb_app_state';
 
 export const useAppStore = create<AppState>((set, get) => {
   
-  // Helper to save state locally
   const saveState = async (newState: Partial<AppState>) => {
     try {
       const stateToSave = {
@@ -304,11 +346,13 @@ export const useAppStore = create<AppState>((set, get) => {
       { id: 'f2', name: 'Sarah', event: 'lock', detail: 'is stuck on Instagram. Cheer them on!', timestamp: '5 mins ago' }
     ],
     
-    // Hardware step and screen-off tracking state
     stepsWalked: 0,
     screenOffStartTime: null,
     screenOffTargetDuration: 0,
     screenOffInterrupted: false,
+    
+    breakLoopActive: false,
+    breakLoopTime: 0,
     
     focusLockActive: false,
     restrictedApp: '',
@@ -317,17 +361,36 @@ export const useAppStore = create<AppState>((set, get) => {
     missionTimeLeft: 0,
     syncStatus: 'synced',
     
+    isTimeTampered: false,
+    lastKnownTime: Date.now(),
+    
+    socialUsage: {
+      TikTok: 100,
+      Instagram: 134,
+      YouTube: 45,
+      Snapchat: 20,
+      Facebook: 15,
+    },
+    
     // Onboarding Action
-    setOnboarding: (profileData) => {
-      const updatedUser = { ...get().user, ...profileData, isOnboarded: true };
+    setOnboarding: async (profileData) => {
+      const updatedUser = { 
+        ...get().user, 
+        ...profileData, 
+        isOnboarded: true 
+      };
+      
       set({ user: updatedUser });
-      saveState({ user: updatedUser });
+      await saveDbUser(updatedUser);
+      await saveState({ user: updatedUser });
+      
+      // Queue sync item
+      await queueSyncItem('onboarding_update', { name: updatedUser.name, intensity: updatedUser.recoveryIntensity });
       get().triggerSync();
     },
 
     // Energy Log Actions
-    addEnergyLog: (logData) => {
-      // Calculate score value based on category/duration/intensity
+    addEnergyLog: async (logData) => {
       let multiplier = 1.0;
       if (logData.type === 'spent') {
         if (logData.intensity === 'Low') multiplier = 0.5;
@@ -356,16 +419,19 @@ export const useAppStore = create<AppState>((set, get) => {
         balance: updatedBalance,
       });
 
-      // Auto-trigger Focus Lock simulation if balance is too low (e.g. balanceScore < -60)
+      // Write to SQLite
+      await addDbLog(newLog);
+
       if (updatedBalance.balanceScore < -60 && !get().focusLockActive) {
-        get().triggerFocusLock('Instagram', 15 * 60); // simulated 15 mins lock
+        get().triggerFocusLock('Instagram', 15 * 60);
       }
 
-      saveState({ energyLogs: updatedLogs, balance: updatedBalance });
+      await saveState({ energyLogs: updatedLogs, balance: updatedBalance });
+      await queueSyncItem('add_log', { id: newLog.id, scoreValue: newLog.scoreValue });
       get().triggerSync();
     },
 
-    deleteEnergyLog: (id) => {
+    deleteEnergyLog: async (id) => {
       const updatedLogs = get().energyLogs.filter(log => log.id !== id);
       const updatedBalance = recalculateBalance(updatedLogs);
 
@@ -374,11 +440,14 @@ export const useAppStore = create<AppState>((set, get) => {
         balance: updatedBalance,
       });
 
-      saveState({ energyLogs: updatedLogs, balance: updatedBalance });
+      // Delete from SQLite
+      await deleteDbLog(id);
+
+      await saveState({ energyLogs: updatedLogs, balance: updatedBalance });
+      await queueSyncItem('delete_log', { id });
       get().triggerSync();
     },
 
-    // Priorities
     setPriorities: (priorityData) => {
       const newPriorities: DailyPriorities = {
         ...priorityData,
@@ -420,14 +489,13 @@ export const useAppStore = create<AppState>((set, get) => {
       get().triggerSync();
     },
 
-    // Reviews
     submitEveningReview: (reviewData) => {
       const newReview: EveningReview = {
         ...reviewData,
         date: new Date().toDateString(),
       };
       const updatedReviews = [newReview, ...get().eveningReviews];
-      const newPoints = get().points + 20; // 20 points for reflecting!
+      const newPoints = get().points + 20;
 
       set({
         eveningReviews: updatedReviews,
@@ -438,7 +506,6 @@ export const useAppStore = create<AppState>((set, get) => {
       get().triggerSync();
     },
 
-    // Missions
     startMission: (missionId) => {
       const mission = get().missions.find(m => m.id === missionId);
       if (!mission) return;
@@ -458,11 +525,10 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    completeMission: () => {
+    completeMission: async () => {
       const activeMission = get().currentActiveMission;
       if (!activeMission) return;
 
-      // Add to completed list
       const updatedCompletions = [...get().completedMissions, activeMission.id];
       const newPoints = get().points + activeMission.points;
       const newStreak = get().streakCount + 1;
@@ -493,18 +559,23 @@ export const useAppStore = create<AppState>((set, get) => {
         missionTimeLeft: 0,
       });
 
-      // If focus lock was active, release it since we completed a mission!
+      // Write to SQLite
+      await addDbCompletedMission(activeMission.id);
+      await addDbLog(recoveryLog);
+
       if (get().focusLockActive) {
         get().releaseFocusLock();
       }
 
-      saveState({
+      await saveState({
         completedMissions: updatedCompletions,
         points: newPoints,
         streakCount: newStreak,
         energyLogs: updatedLogs,
         balance: updatedBalance,
       });
+
+      await queueSyncItem('complete_mission', { id: activeMission.id, points: activeMission.points });
       get().triggerSync();
     },
 
@@ -519,7 +590,6 @@ export const useAppStore = create<AppState>((set, get) => {
       });
     },
 
-    // Buddy Actions
     sendBuddyRequest: (name) => {
       const trimmed = name.trim();
       if (!trimmed) return;
@@ -576,7 +646,7 @@ export const useAppStore = create<AppState>((set, get) => {
       saveState({ buddyRequests: updatedRequests });
     },
 
-    sendCheerToBuddy: (buddyName) => {
+    sendCheerToBuddy: async (buddyName) => {
       const newFeedItem: BuddyFeedItem = {
         id: Math.random().toString(36).substr(2, 9),
         name: 'You',
@@ -589,10 +659,57 @@ export const useAppStore = create<AppState>((set, get) => {
       const updatedFeed = [newFeedItem, ...get().buddyFeed];
       
       set({ buddyFeed: updatedFeed, points: newPoints });
-      saveState({ buddyFeed: updatedFeed, points: newPoints });
+      await saveState({ buddyFeed: updatedFeed, points: newPoints });
+      
+      await queueSyncItem('cheer_buddy', { buddy: buddyName });
+      get().triggerSync();
+    },
+
+    toggleBreakLoop: () => {
+      const active = get().breakLoopActive;
+      if (!active) {
+        set({ breakLoopActive: true, breakLoopTime: 0 });
+      } else {
+        set({ breakLoopActive: false });
+      }
+    },
+
+    tickBreakLoop: () => {
+      if (get().breakLoopActive) {
+        set({ breakLoopTime: get().breakLoopTime + 1 });
+      }
+    },
+
+    fetchOnlineBuddyUpdates: async () => {
+      try {
+        const response = await fetch('https://jsonplaceholder.typicode.com/comments?_limit=3');
+        const data = await response.json();
+        const names = ['Abel', 'Sarah', 'Alex', 'Jessica'];
+        const events: ('success' | 'lock' | 'cheer')[] = ['success', 'lock', 'cheer'];
+        const details = [
+          'completed a 10m Nature Walk!',
+          'is stuck on Instagram. Cheer them on!',
+          'just registered a 12-day streak!',
+          'completed their Breathing Gap session!'
+        ];
+        
+        const newItems: BuddyFeedItem[] = data.map((item: any, idx: number) => ({
+          id: `online_${item.id}_${Date.now()}`,
+          name: names[idx % names.length],
+          event: events[idx % events.length],
+          detail: `${details[idx % details.length]} ("${item.name.split(' ')[0]}")`,
+          timestamp: 'Just now (online)'
+        }));
+        
+        const currentFeed = get().buddyFeed;
+        const updatedFeed = [...newItems, ...currentFeed].slice(0, 15);
+        set({ buddyFeed: updatedFeed });
+        saveState({ buddyFeed: updatedFeed });
+      } catch (err) {
+        console.log('Failed to fetch online buddy updates', err);
+      }
     },
     
-    // Hardware & Screen Off Actions
     incrementSteps: (count) => {
       const newSteps = get().stepsWalked + count;
       set({ stepsWalked: newSteps });
@@ -650,7 +767,6 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    // Focus Lock Simulation Actions
     triggerFocusLock: (appName, durationSeconds = 600) => {
       set({
         focusLockActive: true,
@@ -680,42 +796,179 @@ export const useAppStore = create<AppState>((set, get) => {
       });
     },
 
+    // MANUAL LOG OF SOCIAL USAGE (To simulate real phone tracking activity in-app)
+    logManualSocialUsage: async (app, minutes) => {
+      // 1. Write to database log history
+      await addSocialUsageLog(app, minutes);
+      
+      // 2. Update local state representation
+      const currentUsage = get().socialUsage;
+      const key = app as keyof typeof currentUsage;
+      if (currentUsage[key] !== undefined) {
+        const updatedUsage = {
+          ...currentUsage,
+          [key]: currentUsage[key] + minutes,
+        };
+        set({ socialUsage: updatedUsage });
+      }
+      
+      // 3. Re-verify locks
+      get().checkSystemLocks();
+      
+      // 4. Send buddy status alert
+      await queueSyncItem('social_activity', { app, minutes });
+      get().triggerSync();
+    },
+
+    // SYSTEM LOCK MONITOR
+    checkSystemLocks: async () => {
+      // A. TIME TAMPER DETECTOR
+      const now = Date.now();
+      const last = get().lastKnownTime;
+      const diff = now - last;
+      
+      // Check for jumps larger than 10 minutes (600,000 ms) in either direction
+      // (ignoring normal AppState suspensions since we update lastKnownTime on resume)
+      if (Math.abs(diff) > 10 * 60 * 1000) {
+        set({ isTimeTampered: true });
+        console.warn('[SECURITY] System clock tampering detected!');
+      }
+      set({ lastKnownTime: now });
+
+      // B. MIDNIGHT SLEEP LOCK
+      const hour = new Date().getHours();
+      const intensity = get().user.recoveryIntensity || 'medium';
+      
+      if (intensity === 'high' && (hour >= 23 || hour < 6)) {
+        if (get().restrictedApp !== 'Sleep Lockout') {
+          set({
+            focusLockActive: true,
+            restrictedApp: 'Sleep Lockout',
+            focusLockTimeLeft: 3600 * 7, // Full sleep cycle block
+          });
+        }
+        return;
+      } else if (get().restrictedApp === 'Sleep Lockout' && (hour >= 6 && hour < 23)) {
+        // Sleep lockout is over! release
+        get().releaseFocusLock();
+      }
+
+      // C. SLIDING WINDOW RATE LIMITER
+      // High: 30m in last 2h. Medium: 40m in last 2h. Low: 60m in last 2h.
+      const thresholdMap = {
+        high: 30,
+        medium: 40,
+        low: 60,
+      };
+      const threshold = thresholdMap[intensity];
+      const slidingStart = Date.now() - 2 * 60 * 60 * 1000;
+      
+      const usageLogs = await getSocialUsageLogs(slidingStart);
+      const totalMinutes = usageLogs.reduce((acc, log) => acc + log.durationMinutes, 0);
+
+      // If user exceeded sliding window rate limit, lock them out of social media
+      if (totalMinutes >= threshold && !get().focusLockActive) {
+        set({
+          focusLockActive: true,
+          restrictedApp: 'Social Media Limit',
+          focusLockTimeLeft: 1200, // 20 minute cooldown
+        });
+        
+        await queueSyncItem('rate_limit_lockout', { limit: threshold, actual: totalMinutes });
+        get().triggerSync();
+      }
+    },
+
     // Sync Simulation
     triggerSync: () => {
       set({ syncStatus: 'pending_sync' });
-      setTimeout(() => {
+      setTimeout(async () => {
         set({ syncStatus: 'syncing' });
-        setTimeout(() => {
-          set({ syncStatus: 'synced' });
-        }, 1500);
-      }, 500);
+        
+        try {
+          const queue = await getSyncQueue();
+          if (queue.length > 0) {
+            // Process queue items and make mock fetch endpoints to sync buddy notifications
+            await fetch('https://jsonplaceholder.typicode.com/posts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ events: queue }),
+            });
+            
+            // Successfully synced! Remove from local DB
+            await removeSyncItems(queue.map(q => q.id));
+            console.log(`[SYNC] Synced ${queue.length} items to online server successfully`);
+          }
+        } catch (err) {
+          console.log('[SYNC] Offline or network error. Items remain in SQLite queue.', err);
+        }
+
+        set({ syncStatus: 'synced' });
+      }, 1500);
     },
 
     // Load State
     loadSavedState: async () => {
       try {
+        await initDb();
+        await pruneOldSocialLogs();
+
+        // Load setting configurations from SQLite
+        const dbUser = await getDbUser();
+        const dbLogs = await getDbLogs();
+        const dbMissions = await getDbCompletedMissions();
+
         const saved = await AsyncStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
+          const userProfile = dbUser ?? parsed.user ?? initialProfile;
+          const logs = dbLogs.length > 0 ? dbLogs : (parsed.energyLogs ?? []);
+          const balance = recalculateBalance(logs);
+          
           set({
-            user: parsed.user ?? initialProfile,
-            balance: parsed.balance ?? initialBalance,
+            user: userProfile,
+            balance: balance,
             points: parsed.points ?? 50,
             streakCount: parsed.streakCount ?? 5,
-            energyLogs: parsed.energyLogs ?? [],
+            energyLogs: logs,
             priorities: parsed.priorities ?? null,
             eveningReviews: parsed.eveningReviews ?? [],
-            completedMissions: parsed.completedMissions ?? [],
+            completedMissions: dbMissions.length > 0 ? dbMissions : (parsed.completedMissions ?? []),
             buddies: parsed.buddies ?? ['Alex', 'Sarah', 'Jessica'],
             buddyRequests: parsed.buddyRequests ?? [],
             buddyFeed: parsed.buddyFeed ?? [
               { id: 'f1', name: 'Alex', event: 'success', detail: 'completed a 10m Nature Walk!', timestamp: '2 mins ago' },
               { id: 'f2', name: 'Sarah', event: 'lock', detail: 'is stuck on Instagram. Cheer them on!', timestamp: '5 mins ago' }
             ],
+            socialUsage: parsed.socialUsage ?? {
+              TikTok: 100,
+              Instagram: 134,
+              YouTube: 45,
+              Snapchat: 20,
+              Facebook: 15,
+            },
+            breakLoopActive: false,
+            breakLoopTime: 0,
+            lastKnownTime: Date.now(),
           });
+        } else {
+          // No AsyncStorage state, check if SQLite user exists
+          if (dbUser) {
+            const balance = recalculateBalance(dbLogs);
+            set({
+              user: dbUser,
+              energyLogs: dbLogs,
+              completedMissions: dbMissions,
+              balance: balance,
+              lastKnownTime: Date.now(),
+            });
+          }
         }
+        
+        // Initial system check
+        get().checkSystemLocks();
       } catch (e) {
-        console.error('Failed to load state from AsyncStorage', e);
+        console.error('Failed to load state from database/AsyncStorage', e);
       }
     },
 
@@ -739,13 +992,36 @@ export const useAppStore = create<AppState>((set, get) => {
         screenOffStartTime: null,
         screenOffTargetDuration: 0,
         screenOffInterrupted: false,
+        breakLoopActive: false,
+        breakLoopTime: 0,
         focusLockActive: false,
         restrictedApp: '',
         focusLockTimeLeft: 0,
         currentActiveMission: null,
         missionTimeLeft: 0,
+        isTimeTampered: false,
+        socialUsage: {
+          TikTok: 100,
+          Instagram: 134,
+          YouTube: 45,
+          Snapchat: 20,
+          Facebook: 15,
+        },
       });
       AsyncStorage.removeItem(STORAGE_KEY);
+      AsyncStorage.removeItem(KEYS.USER);
+      AsyncStorage.removeItem(KEYS.LOGS);
+      AsyncStorage.removeItem(KEYS.MISSIONS);
+      AsyncStorage.removeItem(KEYS.SYNC_QUEUE);
+      AsyncStorage.removeItem(KEYS.SOCIAL_LOGS);
     }
   };
 });
+
+const KEYS = {
+  USER: '@demb_db_user',
+  LOGS: '@demb_db_logs',
+  MISSIONS: '@demb_db_missions',
+  SYNC_QUEUE: '@demb_db_sync_queue',
+  SOCIAL_LOGS: '@demb_db_social_logs',
+};

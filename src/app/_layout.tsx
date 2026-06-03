@@ -18,6 +18,7 @@ export default function RootLayout() {
   const user = useAppStore(state => state.user);
   const focusLockActive = useAppStore(state => state.focusLockActive);
   const loadSavedState = useAppStore(state => state.loadSavedState);
+  const checkSystemLocks = useAppStore(state => state.checkSystemLocks);
 
   // Initialize store and check onboarding state
   useEffect(() => {
@@ -33,6 +34,16 @@ export default function RootLayout() {
     }
     prepare();
   }, []);
+
+  // Global background system locks tick
+  useEffect(() => {
+    if (!isReady) return;
+    checkSystemLocks();
+    const interval = setInterval(() => {
+      checkSystemLocks();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isReady]);
 
   // Handle routing logic based on auth/onboarding & focus lock state
   useEffect(() => {

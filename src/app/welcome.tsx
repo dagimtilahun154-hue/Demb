@@ -93,8 +93,10 @@ export default function WelcomeScreen() {
           </View>
 
           <Pressable style={styles.googleButton} onPress={handleNext}>
-            <Text style={styles.googleWord}>GOOGLE</Text>
-            <Text style={styles.googleText}>Continue with{'\n'}Google</Text>
+            <View style={styles.googleIconContainer}>
+              <Ionicons name="logo-google" size={20} color="#4285F4" />
+            </View>
+            <Text style={styles.googleText}>Continue with Google</Text>
           </Pressable>
 
           <Pressable style={styles.phoneButton} onPress={handleNext}>
@@ -277,31 +279,28 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   googleButton: {
-    height: 70,
-    borderRadius: 35,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: '#E3E1E6',
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: 24,
-    paddingRight: 54,
+    justifyContent: 'center',
+    gap: 12,
     marginBottom: 12,
   },
-  googleWord: {
-    color: '#232126',
-    fontSize: 27,
-    lineHeight: 31,
-    fontWeight: '400',
-    letterSpacing: 2.2,
+  googleIconContainer: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   googleText: {
     color: '#232126',
     fontSize: 15,
-    lineHeight: 18,
-    fontWeight: '500',
-    textAlign: 'center',
+    lineHeight: 19,
+    fontWeight: '700',
   },
   phoneButton: {
     height: 56,
