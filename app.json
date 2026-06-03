@@ -12,9 +12,15 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.demb.app",
       "adaptiveIcon": {
         "backgroundColor": "#fdf7ff"
-      }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACTIVITY_RECOGNITION"
+      ]
     },
     "web": {
       "output": "static",
@@ -30,6 +36,12 @@
           "image": "./assets/images/demb-app-logo.png",
           "imageWidth": 200,
           "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Demb needs your location to track walking missions."
         }
       ]
     ],
