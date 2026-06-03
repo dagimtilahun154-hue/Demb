@@ -4,7 +4,7 @@
     "slug": "demb",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.jpg",
+    "icon": "./assets/images/demb-app-logo.png",
     "scheme": "demb",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
@@ -27,7 +27,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#674bb5",
-          "image": "./assets/images/logo.jpg",
+          "image": "./assets/images/demb-app-logo.png",
           "imageWidth": 200,
           "resizeMode": "contain"
         }

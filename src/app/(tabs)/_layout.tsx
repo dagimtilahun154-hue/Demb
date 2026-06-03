@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { StyleSheet, Platform } from 'react-native';
-import { Colors, Radius, Spacing, Shadows } from '@/constants/theme';
+import { StyleSheet } from 'react-native';
+import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function TabLayout() {
@@ -36,18 +36,27 @@ export default function TabLayout() {
       <Tabs.Screen
         name="activity"
         options={{
-          title: 'Log',
+          title: 'Recovery',
           tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
-            <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={24} color={color} />
+            <Ionicons name={focused ? 'refresh-circle' : 'refresh-circle-outline'} size={24} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="circles"
         options={{
-          title: 'Circles',
+          title: 'Buddies',
           tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <Ionicons name={focused ? 'people' : 'people-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="rewards"
+        options={{
+          title: 'Rewards',
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+            <Ionicons name={focused ? 'gift' : 'gift-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -67,13 +76,13 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    bottom: 16,
-    left: 24,
-    right: 24,
-    height: 68,
-    borderRadius: 24,
-    paddingBottom: 8,
-    paddingTop: 8,
+    bottom: 14,
+    left: 18,
+    right: 18,
+    height: 72,
+    borderRadius: 26,
+    paddingBottom: 9,
+    paddingTop: 9,
     borderTopWidth: 0,
     borderWidth: 1,
     elevation: 8,
@@ -83,7 +92,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
   },
   label: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     marginTop: 2,
   },

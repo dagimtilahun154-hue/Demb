@@ -25,8 +25,8 @@ export default function ProgressCircle({
   const strokeDashoffset = circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference;
 
   // Emotive coloring: Red-Orange for low, Lavender/Blue for mid, Mint/Green for high balance
-  let ringColorStart = colors.primaryLight;
-  let ringColorEnd = colors.primary;
+  let ringColorStart: string = colors.primaryLight;
+  let ringColorEnd: string = colors.primary;
   let iconName: keyof typeof Ionicons.glyphMap = 'flash';
 
   if (score < 40) {

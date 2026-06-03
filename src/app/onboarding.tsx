@@ -24,7 +24,7 @@ const goals: Array<{ id: Goal; title: string; subtitle: string; icon: string }> 
   { id: 'movement', title: 'More Movement', subtitle: 'Add gentle activity.', icon: 'walk-outline' },
   { id: 'habits', title: 'Healthier Daily Habits', subtitle: 'Build actions that stick.', icon: 'water-outline' },
   { id: 'wellbeing', title: 'Better Emotional Wellbeing', subtitle: 'Feel calmer daily.', icon: 'happy-outline' },
-  { id: 'friends', title: 'Accountability With Friends', subtitle: 'Stay motivated together.', icon: 'handshake-outline' },
+  { id: 'friends', title: 'Accountability With Friends', subtitle: 'Stay motivated together.', icon: 'people-outline' },
 ];
 
 export default function OnboardingScreen() {

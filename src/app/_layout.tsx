@@ -42,6 +42,7 @@ export default function RootLayout() {
     const inWelcome = segments[0] === 'welcome';
     const inOnboarding = segments[0] === 'onboarding';
     const inFocusLock = segments[0] === 'focus-lock';
+    const isRootRoute = (segments as string[]).length === 0;
 
     // 1. If focus lock is triggered, force redirect to focus-lock screen
     if (focusLockActive && !inFocusLock) {
@@ -56,7 +57,7 @@ export default function RootLayout() {
       }
     } else {
       // 3. If onboarded, redirect to tabs (unless already there or in focus-lock/mission)
-      if (inWelcome || inOnboarding || segments.length === 0) {
+      if (inWelcome || inOnboarding || isRootRoute) {
         router.replace('/(tabs)' as any);
       }
     }

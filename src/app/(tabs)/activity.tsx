@@ -534,7 +534,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
     ...Shadows.elevated,
   },
   modalOverlay: {
