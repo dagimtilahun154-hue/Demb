@@ -171,6 +171,17 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.scoreCardContainer}>
+          {/* Floating Smiling Character overlay when score is > 80 */}
+          {recoveryScore >= 80 && (
+            <Animated.View style={[styles.floatingScoreCharacter, { transform: [{ translateY: floatY }] }]}>
+              <Image 
+                source={require('../../../assets/images/demb-happy.png')} 
+                style={styles.floatingCharacterImage} 
+                contentFit="contain" 
+              />
+            </Animated.View>
+          )}
+
           <View style={styles.scoreCard}>
             <View style={styles.scoreTop}>
               <View>
@@ -194,17 +205,6 @@ export default function DashboardScreen() {
               <Text style={styles.trendText}>{stateCopy}</Text>
             </View>
           </View>
-
-          {/* Floating Smiling Character overlay when score is > 80 */}
-          {recoveryScore >= 80 && (
-            <Animated.View style={[styles.floatingScoreCharacter, { transform: [{ translateY: floatY }] }]}>
-              <Image 
-                source={require('../../../assets/images/demb-happy.png')} 
-                style={styles.floatingCharacterImage} 
-                contentFit="contain" 
-              />
-            </Animated.View>
-          )}
         </View>
 
         <View style={styles.statsRow}>
@@ -421,15 +421,16 @@ const styles = StyleSheet.create({
     width: 210,
     height: 210,
     borderRadius: 105,
-    backgroundColor: '#E7DFFF',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 5,
-    borderColor: '#FFFFFF',
-    shadowColor: '#B7A7FF',
+    borderWidth: 8,
+    borderColor: '#E7DFFF',
+    shadowColor: '#6C63FF',
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.24,
+    shadowOpacity: 0.28,
     shadowRadius: 28,
+    elevation: 12,
   },
   breakLoopText: {
     color: '#6D6879',
@@ -450,12 +451,12 @@ const styles = StyleSheet.create({
   },
   floatingScoreCharacter: {
     position: 'absolute',
-    left: 2,
-    top: -100,
+    left: 8,
+    top: -125,
     width: 160,
     height: 170,
-    zIndex: 999,
-    elevation: 10,
+    zIndex: 1,
+    elevation: 1,
   },
   floatingCharacterImage: {
     width: '100%',
@@ -517,6 +518,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
+    zIndex: 2,
+    elevation: 2,
   },
   scoreTop: {
     flexDirection: 'row',

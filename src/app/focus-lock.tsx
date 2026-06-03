@@ -218,10 +218,10 @@ export default function FocusLockScreen() {
         {/* Title Block */}
         <Text style={styles.shieldTitle}>Demb Shield</Text>
         <Text style={styles.shieldDescription}>
-          You've been scrolling for a while. Let's take a quick recovery moment before continuing.
+          Pause first. Take a quick recovery break.
         </Text>
         <Text style={styles.shieldSubDescription}>
-          Small recovery moments protect your energy and focus.
+          Protect your time and focus.
         </Text>
 
         {/* Time Limit Badge */}
@@ -250,7 +250,7 @@ export default function FocusLockScreen() {
             <Text style={styles.cardHeaderTitle}>Recovery Challenge</Text>
           </View>
           <Text style={styles.cardBodyText}>
-            Protect your streak and recover your energy.
+            Complete a reset task to unlock.
           </Text>
           
           <View style={styles.iconSelectionRow}>
@@ -279,7 +279,7 @@ export default function FocusLockScreen() {
             <Text style={styles.cardHeaderTitle}>Return To What Matters</Text>
           </View>
           <Text style={styles.cardBodyText}>
-            Continue something meaningful you previously left unfinished.
+            Return to offline balance.
           </Text>
 
           <View style={styles.iconSelectionRow}>
@@ -301,7 +301,7 @@ export default function FocusLockScreen() {
 
         {/* Footer */}
         <Text style={styles.footerNote}>
-          Demb doesn't block your life. Demb helps you return to it.
+          Demb helps you return to life.
         </Text>
       </ScrollView>
 
