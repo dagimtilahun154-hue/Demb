@@ -17,6 +17,8 @@ export default function ProfileScreen() {
     user,
     points,
     streakCount,
+    burnoutRisk,
+    recoveryPlan,
     resetAllData,
     setOnboarding,
   } = useAppStore();
@@ -142,6 +144,22 @@ export default function ProfileScreen() {
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Active Streak</Text>
           </NeomorphicCard>
         </View>
+
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Burnout Prevention Plan</Text>
+        <NeomorphicCard style={styles.planStatusCard} bgColor={colors.surface}>
+          <View style={styles.planStatusTop}>
+            <View>
+              <Text style={[styles.planStatusLabel, { color: colors.primary }]}>CURRENT STATUS</Text>
+              <Text style={[styles.planStatusTitle, { color: colors.textPrimary }]}>{burnoutRisk.status}</Text>
+            </View>
+            <View style={[styles.planScorePill, { backgroundColor: colors.primaryContainer }]}>
+              <Text style={[styles.planScoreText, { color: colors.primary }]}>{burnoutRisk.recoveryScore}%</Text>
+            </View>
+          </View>
+          <Text style={[styles.planStatusText, { color: colors.textSecondary }]}>
+            {recoveryPlan?.active ? 'Your local recovery plan is active and ready to guide tasks.' : 'Generate a recovery plan after observation mode.'}
+          </Text>
+        </NeomorphicCard>
 
         {/* Badge Grid */}
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Achievements & Badges</Text>
@@ -332,6 +350,42 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     fontWeight: '500',
+  },
+  planStatusCard: {
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  planStatusTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  planStatusLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+    marginBottom: 4,
+  },
+  planStatusTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  planScorePill: {
+    minWidth: 58,
+    height: 34,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two,
+  },
+  planScoreText: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  planStatusText: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 18,

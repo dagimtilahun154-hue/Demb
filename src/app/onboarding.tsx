@@ -99,7 +99,7 @@ export default function OnboardingScreen() {
       dailyGoal: goal,
       recoveryIntensity: intensity,
     });
-    router.replace('/(tabs)');
+    router.replace('/observation');
   };
 
   return (

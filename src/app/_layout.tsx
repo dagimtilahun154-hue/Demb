@@ -17,6 +17,7 @@ export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const user = useAppStore(state => state.user);
   const focusLockActive = useAppStore(state => state.focusLockActive);
+  const observationComplete = useAppStore(state => state.observationComplete);
   const loadSavedState = useAppStore(state => state.loadSavedState);
   const checkSystemLocks = useAppStore(state => state.checkSystemLocks);
 
@@ -52,6 +53,7 @@ export default function RootLayout() {
     const inTabsGroup = segments[0] === '(tabs)';
     const inWelcome = segments[0] === 'welcome';
     const inOnboarding = segments[0] === 'onboarding';
+    const inObservation = segments[0] === 'observation';
     const inFocusLock = segments[0] === 'focus-lock';
     const isRootRoute = (segments as string[]).length === 0;
 
@@ -67,12 +69,16 @@ export default function RootLayout() {
         router.replace('/welcome' as any);
       }
     } else {
+      if (!observationComplete && (inWelcome || inOnboarding || isRootRoute)) {
+        router.replace('/observation' as any);
+        return;
+      }
       // 3. If onboarded, redirect to tabs (unless already there or in focus-lock/mission)
-      if (inWelcome || inOnboarding || isRootRoute) {
+      if ((observationComplete && inObservation) || inWelcome || inOnboarding || isRootRoute) {
         router.replace('/(tabs)' as any);
       }
     }
-  }, [isReady, user.isOnboarded, focusLockActive, segments]);
+  }, [isReady, user.isOnboarded, focusLockActive, observationComplete, segments]);
 
   if (!isReady) {
     return (
@@ -89,6 +95,13 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="observation" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="plan" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="recovery-mode" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="mood-checkin" options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="sound-therapy" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="buddy-tree" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="insights" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="mission" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="focus-lock" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false, animation: 'fade' }} />
       </Stack>

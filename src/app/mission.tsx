@@ -211,6 +211,7 @@ export default function MissionTimerScreen() {
             subscription = Pedometer.watchStepCount((result: any) => {
               if (initialSteps === null) {
                 initialSteps = result.steps;
+                return;
               }
               const diff = result.steps - initialSteps;
               if (diff > 0) {

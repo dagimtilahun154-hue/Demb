@@ -5,17 +5,21 @@ import { Colors, Spacing, Radius, Shadows, BottomTabInset } from '@/constants/th
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '@/store';
 import NeomorphicCard from '@/components/NeomorphicCard';
+import { useRouter } from 'expo-router';
 
 export default function WellnessCirclesScreen() {
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
   const insets = useSafeAreaInsets();
   const isDark = scheme === 'dark';
+  const router = useRouter();
 
   const {
     buddies,
     buddyRequests,
     buddyFeed,
+    buddyGroup,
+    recoveryTree,
     sendBuddyRequest,
     acceptBuddyRequest,
     declineBuddyRequest,
@@ -109,6 +113,23 @@ export default function WellnessCirclesScreen() {
       >
         {/* Title */}
         <Text style={[styles.title, { color: colors.textPrimary }]}>Wellness Circles</Text>
+
+        <Pressable onPress={() => router.push('/buddy-tree')}>
+          <NeomorphicCard style={styles.treeCard} bgColor={colors.secondaryContainer}>
+            <View style={styles.treeTopRow}>
+              <View style={styles.treeIcon}>
+                <Ionicons name="leaf" size={28} color={colors.secondary} />
+              </View>
+              <View style={styles.treeCopy}>
+                <Text style={[styles.treeTitle, { color: colors.textPrimary }]}>Shared Recovery Tree</Text>
+                <Text style={[styles.treeSubtitle, { color: colors.textSecondary }]}>
+                  Level {recoveryTree.level} · {recoveryTree.leavesCount} leaves · {recoveryTree.growthStage.replace('_', ' ')}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </View>
+          </NeomorphicCard>
+        </Pressable>
 
         {/* Squad Status Header Card */}
         <NeomorphicCard style={styles.groupCard} bgColor={colors.primary}>
@@ -214,17 +235,17 @@ export default function WellnessCirclesScreen() {
         {/* Buddies Roster list */}
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Demb Buddies</Text>
         <NeomorphicCard style={styles.buddiesCard}>
-          {buddies.length === 0 ? (
+          {buddyGroup.members.length <= 1 ? (
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>No buddies added yet. Secure your circle above!</Text>
           ) : (
-            buddies.map((buddy, index) => (
-              <View key={buddy} style={[styles.buddyRow, index < buddies.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.outlineVariant + '20' }]}>
+            buddyGroup.members.filter(member => member.id !== 'me').map((member, index) => (
+              <View key={member.id} style={[styles.buddyRow, index < buddyGroup.members.length - 2 && { borderBottomWidth: 1, borderBottomColor: colors.outlineVariant + '20' }]}>
                 <View style={styles.buddyLeft}>
-                  <View style={[styles.statusDot, { backgroundColor: index === 1 ? colors.error : colors.success }]} />
-                  <Text style={[styles.buddyName, { color: colors.textPrimary }]}>{buddy}</Text>
+                  <View style={[styles.statusDot, { backgroundColor: member.currentState === 'At Risk' || member.currentState === 'Critical' ? colors.primaryLight : colors.success }]} />
+                  <Text style={[styles.buddyName, { color: colors.textPrimary }]}>{member.name}</Text>
                 </View>
-                <Text style={[styles.buddyStatusText, { color: index === 1 ? colors.error : colors.success }]}>
-                  {index === 1 ? 'Locked (Instagram)' : 'Active Patrol'}
+                <Text style={[styles.buddyStatusText, { color: member.currentState === 'At Risk' || member.currentState === 'Critical' ? colors.primary : colors.success }]}>
+                  {member.currentState} · {member.recoveryScore}%
                 </Text>
               </View>
             ))
@@ -286,6 +307,35 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.8,
+  },
+  treeCard: {
+    padding: Spacing.three,
+  },
+  treeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  treeIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.three,
+  },
+  treeCopy: {
+    flex: 1,
+  },
+  treeTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  treeSubtitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'capitalize',
   },
   groupCard: {
     padding: Spacing.four,

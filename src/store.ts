@@ -16,6 +16,22 @@ import {
   getSocialUsageLogs,
   pruneOldSocialLogs
 } from './db';
+import type {
+  ActivitySnapshot,
+  BehaviorEvent,
+  Buddy,
+  BuddyGroup,
+  BurnoutRiskResult,
+  EncouragementMessage,
+  MoodCheckIn,
+  RecoveryPlan,
+  RecoverySession,
+  RecoveryTask,
+  RecoveryTree,
+  ScreenUsageSnapshot,
+} from './types/burnout';
+import { buildRiskInputFromSignals, calculateBurnoutRisk } from './utils/burnoutEngine';
+import { generateMockRecoveryPlan } from './utils/mockAiPlan';
 
 export interface EnergyLog {
   id: string;
@@ -146,6 +162,20 @@ export interface AppState {
     Snapchat: number; // minutes
     Facebook: number; // minutes
   };
+
+  // Burnout Prevention OS
+  observationStartedAt: string | null;
+  observationComplete: boolean;
+  behaviorEvents: BehaviorEvent[];
+  moodCheckIns: MoodCheckIn[];
+  screenUsageSnapshots: ScreenUsageSnapshot[];
+  activitySnapshots: ActivitySnapshot[];
+  burnoutRisk: BurnoutRiskResult;
+  recoveryPlan: RecoveryPlan | null;
+  recoverySessions: RecoverySession[];
+  buddyGroup: BuddyGroup;
+  recoveryTree: RecoveryTree;
+  encouragementMessages: EncouragementMessage[];
   
   // Actions
   setOnboarding: (profile: Partial<UserProfile>) => void;
@@ -185,6 +215,19 @@ export interface AppState {
   // System Monitor Ticks
   checkSystemLocks: () => void;
   logManualSocialUsage: (app: string, minutes: number) => Promise<void>;
+
+  // Burnout Prevention Actions
+  startObservation: () => void;
+  completeObservation: () => void;
+  seedObservationData: () => void;
+  recordBehaviorEvent: (event: Omit<BehaviorEvent, 'id' | 'createdAt' | 'synced'>) => void;
+  submitMoodCheckIn: (checkIn: Omit<MoodCheckIn, 'id' | 'createdAt'>) => void;
+  refreshBurnoutRisk: () => BurnoutRiskResult;
+  generateRecoveryPlan: () => RecoveryPlan;
+  activateRecoveryPlan: () => void;
+  completeRecoveryTask: (task: RecoveryTask) => void;
+  addBuddyTreeLeaf: (count?: number) => void;
+  sendEncouragementMessage: (buddyName: string, message: string) => void;
   
   // Sync
   triggerSync: () => void;
@@ -269,6 +312,61 @@ const initialBalance: DailyBalance = {
   focusLevel: 65,
 };
 
+const initialSocialUsage = {
+  TikTok: 100,
+  Instagram: 134,
+  YouTube: 45,
+  Snapchat: 20,
+  Facebook: 15,
+};
+
+const initialBurnoutRisk = calculateBurnoutRisk(
+  buildRiskInputFromSignals({
+    totalScreenTimeMins: Object.values(initialSocialUsage).reduce((sum, mins) => sum + mins, 0),
+    highDopamineMinutes: initialSocialUsage.TikTok + initialSocialUsage.Instagram + initialSocialUsage.Snapchat,
+    appSwitchCount: 72,
+    nightScreenTime: 38,
+    stepsWalked: 2200,
+    sedentaryMinutes: 420,
+    sleepHours: 6.2,
+    moodScore: 6,
+    stressScore: 7,
+    energyScore: 5,
+    recoverySessionsCompleted: 0,
+    buddySupportReceived: 1,
+  })
+);
+
+const initialRecoveryTree: RecoveryTree = {
+  id: 'tree_demb_squad',
+  level: 2,
+  leavesCount: 12,
+  branchesCount: 1,
+  flowersCount: 0,
+  fruitsCount: 0,
+  growthStage: 'young_tree',
+};
+
+const initialBuddyGroup: BuddyGroup = {
+  id: 'group_demb_patrol',
+  name: 'Demb Patrol Squad',
+  groupStreak: 12,
+  members: [
+    { id: 'me', name: 'You', personalStreak: 5, recoveryScore: initialBurnoutRisk.recoveryScore, currentState: initialBurnoutRisk.status, treeContribution: 4 },
+    { id: 'alex', name: 'Alex', personalStreak: 9, recoveryScore: 78, currentState: 'Balanced', treeContribution: 3 },
+    { id: 'sarah', name: 'Sarah', personalStreak: 12, recoveryScore: 48, currentState: 'At Risk', treeContribution: 5 },
+    { id: 'jessica', name: 'Jessica', personalStreak: 4, recoveryScore: 70, currentState: 'Draining', treeContribution: 2 },
+  ],
+};
+
+export const ENCOURAGEMENT_MESSAGES = [
+  "Keep going, you're doing great.",
+  "Take a small break, I'm with you.",
+  "Let's protect our tree today.",
+  "You're close to recovery mode completion.",
+  'Small steps count.',
+];
+
 const recalculateBalance = (logs: EnergyLog[]): DailyBalance => {
   let spent = 87; // seed values
   let recovered = 41;
@@ -319,6 +417,19 @@ export const useAppStore = create<AppState>((set, get) => {
         buddies: newState.buddies ?? get().buddies,
         buddyRequests: newState.buddyRequests ?? get().buddyRequests,
         buddyFeed: newState.buddyFeed ?? get().buddyFeed,
+        socialUsage: newState.socialUsage ?? get().socialUsage,
+        observationStartedAt: newState.observationStartedAt ?? get().observationStartedAt,
+        observationComplete: newState.observationComplete ?? get().observationComplete,
+        behaviorEvents: newState.behaviorEvents ?? get().behaviorEvents,
+        moodCheckIns: newState.moodCheckIns ?? get().moodCheckIns,
+        screenUsageSnapshots: newState.screenUsageSnapshots ?? get().screenUsageSnapshots,
+        activitySnapshots: newState.activitySnapshots ?? get().activitySnapshots,
+        burnoutRisk: newState.burnoutRisk ?? get().burnoutRisk,
+        recoveryPlan: newState.recoveryPlan ?? get().recoveryPlan,
+        recoverySessions: newState.recoverySessions ?? get().recoverySessions,
+        buddyGroup: newState.buddyGroup ?? get().buddyGroup,
+        recoveryTree: newState.recoveryTree ?? get().recoveryTree,
+        encouragementMessages: newState.encouragementMessages ?? get().encouragementMessages,
       };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     } catch (e) {
@@ -364,13 +475,20 @@ export const useAppStore = create<AppState>((set, get) => {
     isTimeTampered: false,
     lastKnownTime: Date.now(),
     
-    socialUsage: {
-      TikTok: 100,
-      Instagram: 134,
-      YouTube: 45,
-      Snapchat: 20,
-      Facebook: 15,
-    },
+    socialUsage: initialSocialUsage,
+
+    observationStartedAt: null,
+    observationComplete: false,
+    behaviorEvents: [],
+    moodCheckIns: [],
+    screenUsageSnapshots: [],
+    activitySnapshots: [],
+    burnoutRisk: initialBurnoutRisk,
+    recoveryPlan: null,
+    recoverySessions: [],
+    buddyGroup: initialBuddyGroup,
+    recoveryTree: initialRecoveryTree,
+    encouragementMessages: [],
     
     // Onboarding Action
     setOnboarding: async (profileData) => {
@@ -386,6 +504,7 @@ export const useAppStore = create<AppState>((set, get) => {
       
       // Queue sync item
       await queueSyncItem('onboarding_update', { name: updatedUser.name, intensity: updatedUser.recoveryIntensity });
+      get().startObservation();
       get().triggerSync();
     },
 
@@ -567,12 +686,26 @@ export const useAppStore = create<AppState>((set, get) => {
         get().releaseFocusLock();
       }
 
+      const recoverySession: RecoverySession = {
+        id: Math.random().toString(36).substr(2, 9),
+        taskId: activeMission.id,
+        taskType: activeMission.category === 'Walking' ? 'walking' : activeMission.category === 'No-screen break' ? 'screen_off' : 'breathing',
+        completedAt: new Date().toISOString(),
+        rewardPoints: activeMission.points,
+        recoveryValue: activeMission.recoveryValue,
+      };
+      const updatedSessions = [recoverySession, ...get().recoverySessions];
+      set({ recoverySessions: updatedSessions });
+      get().addBuddyTreeLeaf(1);
+      get().refreshBurnoutRisk();
+
       await saveState({
         completedMissions: updatedCompletions,
         points: newPoints,
         streakCount: newStreak,
         energyLogs: updatedLogs,
         balance: updatedBalance,
+        recoverySessions: updatedSessions,
       });
 
       await queueSyncItem('complete_mission', { id: activeMission.id, points: activeMission.points });
@@ -668,7 +801,18 @@ export const useAppStore = create<AppState>((set, get) => {
     toggleBreakLoop: () => {
       const active = get().breakLoopActive;
       if (!active) {
-        set({ breakLoopActive: true, breakLoopTime: 0 });
+        const risk = get().refreshBurnoutRisk();
+        set({
+          breakLoopActive: true,
+          breakLoopTime: 0,
+          focusLockActive: true,
+          restrictedApp: risk.burnoutRiskScore >= 70 ? 'Burnout Risk Rising' : 'Break Loop',
+          focusLockTimeLeft: 10 * 60,
+        });
+        get().recordBehaviorEvent({
+          type: 'shield_triggered',
+          payload: { source: 'manual_break_loop', riskScore: risk.burnoutRiskScore },
+        });
       } else {
         set({ breakLoopActive: false });
       }
@@ -820,12 +964,259 @@ export const useAppStore = create<AppState>((set, get) => {
       get().triggerSync();
     },
 
+    startObservation: () => {
+      const startedAt = get().observationStartedAt ?? new Date().toISOString();
+      set({
+        observationStartedAt: startedAt,
+        observationComplete: false,
+      });
+      get().seedObservationData();
+      saveState({ observationStartedAt: startedAt, observationComplete: false });
+    },
+
+    completeObservation: () => {
+      set({ observationComplete: true });
+      const plan = get().generateRecoveryPlan();
+      set({ recoveryPlan: { ...plan, active: true } });
+      saveState({ observationComplete: true, recoveryPlan: { ...plan, active: true } });
+    },
+
+    seedObservationData: () => {
+      const now = new Date().toISOString();
+      const usage = get().socialUsage;
+      const screenSnapshot: ScreenUsageSnapshot = {
+        id: Math.random().toString(36).substr(2, 9),
+        screenTimeMinutes: Object.values(usage).reduce((sum, mins) => sum + mins, 0),
+        highDopamineAppMinutes: usage.TikTok + usage.Instagram + usage.Snapchat,
+        appSwitchCount: 72,
+        nightScreenTime: 38,
+        topApps: [
+          { appName: 'Instagram', minutes: usage.Instagram, category: 'social_media' },
+          { appName: 'TikTok', minutes: usage.TikTok, category: 'social_media' },
+          { appName: 'YouTube', minutes: usage.YouTube, category: 'video' },
+        ],
+        createdAt: now,
+      };
+      const activitySnapshot: ActivitySnapshot = {
+        id: Math.random().toString(36).substr(2, 9),
+        stepCount: Math.max(get().stepsWalked, 2200),
+        sedentaryMinutes: 420,
+        sleepHours: 6.2,
+        createdAt: now,
+      };
+      const screenUsageSnapshots = [screenSnapshot, ...get().screenUsageSnapshots].slice(0, 12);
+      const activitySnapshots = [activitySnapshot, ...get().activitySnapshots].slice(0, 12);
+      set({ screenUsageSnapshots, activitySnapshots });
+      get().recordBehaviorEvent({
+        type: 'screen_usage_snapshot',
+        payload: screenSnapshot as unknown as Record<string, unknown>,
+      });
+      get().recordBehaviorEvent({
+        type: 'step_snapshot',
+        payload: activitySnapshot as unknown as Record<string, unknown>,
+      });
+      get().refreshBurnoutRisk();
+      saveState({ screenUsageSnapshots, activitySnapshots });
+    },
+
+    recordBehaviorEvent: (event) => {
+      const newEvent: BehaviorEvent = {
+        ...event,
+        id: Math.random().toString(36).substr(2, 9),
+        createdAt: new Date().toISOString(),
+        synced: false,
+      };
+      const behaviorEvents = [newEvent, ...get().behaviorEvents].slice(0, 80);
+      set({ behaviorEvents });
+      saveState({ behaviorEvents });
+      queueSyncItem(event.type, event.payload);
+    },
+
+    submitMoodCheckIn: (checkIn) => {
+      const newCheckIn: MoodCheckIn = {
+        ...checkIn,
+        id: Math.random().toString(36).substr(2, 9),
+        createdAt: new Date().toISOString(),
+      };
+      const moodCheckIns = [newCheckIn, ...get().moodCheckIns].slice(0, 30);
+      set({ moodCheckIns });
+      get().recordBehaviorEvent({
+        type: 'mood_checkin',
+        payload: {
+          moodScore: newCheckIn.moodScore,
+          energyScore: newCheckIn.energyScore,
+          stressScore: newCheckIn.stressScore,
+          focusScore: newCheckIn.focusScore,
+          overwhelmed: newCheckIn.overwhelmed,
+        },
+      });
+      const risk = get().refreshBurnoutRisk();
+      if (risk.burnoutRiskScore >= 70 && get().observationComplete && !get().focusLockActive) {
+        get().triggerFocusLock('Burnout Risk Rising', 15 * 60);
+      }
+      saveState({ moodCheckIns });
+    },
+
+    refreshBurnoutRisk: () => {
+      const usage = get().socialUsage;
+      const latestMood = get().moodCheckIns[0];
+      const latestScreen = get().screenUsageSnapshots[0];
+      const latestActivity = get().activitySnapshots[0];
+      const totalScreenTimeMins =
+        latestScreen?.screenTimeMinutes ?? Object.values(usage).reduce((sum, mins) => sum + mins, 0);
+      const highDopamineMinutes =
+        latestScreen?.highDopamineAppMinutes ?? usage.TikTok + usage.Instagram + usage.Snapchat;
+
+      const risk = calculateBurnoutRisk(
+        buildRiskInputFromSignals({
+          totalScreenTimeMins,
+          highDopamineMinutes,
+          appSwitchCount: latestScreen?.appSwitchCount ?? 72,
+          nightScreenTime: latestScreen?.nightScreenTime ?? 38,
+          stepsWalked: Math.max(get().stepsWalked, latestActivity?.stepCount ?? 2200),
+          sedentaryMinutes: latestActivity?.sedentaryMinutes ?? 420,
+          sleepHours: latestActivity?.sleepHours ?? 6.2,
+          moodScore: latestMood?.moodScore ?? 6,
+          stressScore: latestMood?.stressScore ?? 7,
+          energyScore: latestMood?.energyScore ?? 5,
+          recoverySessionsCompleted: get().recoverySessions.length + get().completedMissions.length,
+          buddySupportReceived: Math.max(1, get().encouragementMessages.length),
+        })
+      );
+
+      const buddyGroup = {
+        ...get().buddyGroup,
+        members: get().buddyGroup.members.map(member =>
+          member.id === 'me'
+            ? {
+                ...member,
+                recoveryScore: risk.recoveryScore,
+                currentState: risk.status,
+                personalStreak: get().streakCount,
+                treeContribution: get().recoveryTree.leavesCount,
+              }
+            : member
+        ),
+      };
+
+      set({ burnoutRisk: risk, buddyGroup });
+      saveState({ burnoutRisk: risk, buddyGroup });
+      return risk;
+    },
+
+    generateRecoveryPlan: () => {
+      const risk = get().refreshBurnoutRisk();
+      const plan = generateMockRecoveryPlan({
+        userId: get().user.email || get().user.name || 'local-user',
+        risk,
+      });
+      set({ recoveryPlan: plan });
+      get().recordBehaviorEvent({
+        type: 'plan_rule_executed',
+        payload: { planId: plan.planId, riskLevel: plan.riskLevel },
+      });
+      saveState({ recoveryPlan: plan });
+      return plan;
+    },
+
+    activateRecoveryPlan: () => {
+      const currentPlan = get().recoveryPlan ?? get().generateRecoveryPlan();
+      const recoveryPlan = { ...currentPlan, active: true };
+      set({ recoveryPlan });
+      saveState({ recoveryPlan });
+    },
+
+    completeRecoveryTask: async (task) => {
+      const recoverySession: RecoverySession = {
+        id: Math.random().toString(36).substr(2, 9),
+        taskId: task.id,
+        taskType: task.type,
+        completedAt: new Date().toISOString(),
+        rewardPoints: task.rewardPoints,
+        recoveryValue: task.recoveryValue,
+      };
+      const recoveryLog: EnergyLog = {
+        id: Math.random().toString(36).substr(2, 9),
+        type: 'recovered',
+        category: task.type === 'sound_therapy' ? 'Stress regulation support' : task.type,
+        title: task.title,
+        durationMinutes: task.durationMinutes,
+        intensity: 'Medium',
+        scoreValue: task.recoveryValue,
+        notes: 'Recovery support task completed.',
+        createdAt: new Date().toISOString(),
+      };
+      const recoverySessions = [recoverySession, ...get().recoverySessions];
+      const energyLogs = [recoveryLog, ...get().energyLogs];
+      const balance = recalculateBalance(energyLogs);
+      const points = get().points + task.rewardPoints;
+
+      set({ recoverySessions, energyLogs, balance, points });
+      await addDbLog(recoveryLog);
+      get().addBuddyTreeLeaf(1);
+      get().recordBehaviorEvent({
+        type: 'recovery_session_completed',
+        payload: { taskId: task.id, taskType: task.type, rewardPoints: task.rewardPoints },
+      });
+      get().refreshBurnoutRisk();
+      await saveState({ recoverySessions, energyLogs, balance, points });
+      get().triggerSync();
+    },
+
+    addBuddyTreeLeaf: (count = 1) => {
+      const leavesCount = get().recoveryTree.leavesCount + count;
+      const branchesCount = Math.floor(leavesCount / 7);
+      const flowersCount = Math.floor(leavesCount / 30);
+      const fruitsCount = Math.floor(leavesCount / 50);
+      const level = Math.max(1, Math.floor(leavesCount / 6));
+      const growthStage =
+        leavesCount >= 50 ? 'fruiting' : leavesCount >= 30 ? 'blooming' : leavesCount >= 8 ? 'young_tree' : 'seedling';
+      const recoveryTree: RecoveryTree = {
+        ...get().recoveryTree,
+        leavesCount,
+        branchesCount,
+        flowersCount,
+        fruitsCount,
+        level,
+        growthStage,
+      };
+      set({ recoveryTree });
+      saveState({ recoveryTree });
+    },
+
+    sendEncouragementMessage: (buddyName, message) => {
+      const encouragement: EncouragementMessage = {
+        id: Math.random().toString(36).substr(2, 9),
+        text: message,
+        toBuddyName: buddyName,
+        createdAt: new Date().toISOString(),
+      };
+      const encouragementMessages = [encouragement, ...get().encouragementMessages].slice(0, 30);
+      const buddyFeed: BuddyFeedItem[] = [
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          name: 'You',
+          event: 'cheer' as const,
+          detail: `sent encouragement to ${buddyName}: "${message}"`,
+          timestamp: 'Just now',
+        },
+        ...get().buddyFeed,
+      ].slice(0, 20);
+      set({ encouragementMessages, buddyFeed, points: get().points + 5 });
+      get().recordBehaviorEvent({
+        type: 'buddy_encouragement_sent',
+        payload: { buddyName, message },
+      });
+      saveState({ encouragementMessages, buddyFeed, points: get().points });
+    },
+
     // SYSTEM LOCK MONITOR
     checkSystemLocks: async () => {
       // A. TIME TAMPER DETECTOR
       const now = Date.now();
       const last = get().lastKnownTime;
       const diff = now - last;
+      const currentRisk = get().refreshBurnoutRisk();
       
       // Check for jumps larger than 10 minutes (600,000 ms) in either direction
       // (ignoring normal AppState suspensions since we update lastKnownTime on resume)
@@ -866,16 +1257,36 @@ export const useAppStore = create<AppState>((set, get) => {
       const usageLogs = await getSocialUsageLogs(slidingStart);
       const totalMinutes = usageLogs.reduce((acc, log) => acc + log.durationMinutes, 0);
 
-      // If user exceeded sliding window rate limit, lock them out of social media
+      // If user exceeded the sliding window, activate a supportive recovery shield.
       if (totalMinutes >= threshold && !get().focusLockActive) {
         set({
           focusLockActive: true,
-          restrictedApp: 'Social Media Limit',
+          restrictedApp: 'Digital Overload Pattern',
           focusLockTimeLeft: 1200, // 20 minute cooldown
         });
         
         await queueSyncItem('rate_limit_lockout', { limit: threshold, actual: totalMinutes });
+        get().recordBehaviorEvent({
+          type: 'shield_triggered',
+          payload: { source: 'digital_limit', limit: threshold, actual: totalMinutes },
+        });
         get().triggerSync();
+      }
+
+      if (
+        get().observationComplete &&
+        currentRisk.burnoutRiskScore >= 76 &&
+        !get().focusLockActive
+      ) {
+        set({
+          focusLockActive: true,
+          restrictedApp: 'Burnout Risk Rising',
+          focusLockTimeLeft: 15 * 60,
+        });
+        get().recordBehaviorEvent({
+          type: 'shield_triggered',
+          payload: { source: 'burnout_risk_engine', riskScore: currentRisk.burnoutRiskScore },
+        });
       }
     },
 
@@ -940,13 +1351,19 @@ export const useAppStore = create<AppState>((set, get) => {
               { id: 'f1', name: 'Alex', event: 'success', detail: 'completed a 10m Nature Walk!', timestamp: '2 mins ago' },
               { id: 'f2', name: 'Sarah', event: 'lock', detail: 'is stuck on Instagram. Cheer them on!', timestamp: '5 mins ago' }
             ],
-            socialUsage: parsed.socialUsage ?? {
-              TikTok: 100,
-              Instagram: 134,
-              YouTube: 45,
-              Snapchat: 20,
-              Facebook: 15,
-            },
+            socialUsage: parsed.socialUsage ?? initialSocialUsage,
+            observationStartedAt: parsed.observationStartedAt ?? null,
+            observationComplete: parsed.observationComplete ?? false,
+            behaviorEvents: parsed.behaviorEvents ?? [],
+            moodCheckIns: parsed.moodCheckIns ?? [],
+            screenUsageSnapshots: parsed.screenUsageSnapshots ?? [],
+            activitySnapshots: parsed.activitySnapshots ?? [],
+            burnoutRisk: parsed.burnoutRisk ?? initialBurnoutRisk,
+            recoveryPlan: parsed.recoveryPlan ?? null,
+            recoverySessions: parsed.recoverySessions ?? [],
+            buddyGroup: parsed.buddyGroup ?? initialBuddyGroup,
+            recoveryTree: parsed.recoveryTree ?? initialRecoveryTree,
+            encouragementMessages: parsed.encouragementMessages ?? [],
             breakLoopActive: false,
             breakLoopTime: 0,
             lastKnownTime: Date.now(),
@@ -960,6 +1377,7 @@ export const useAppStore = create<AppState>((set, get) => {
               energyLogs: dbLogs,
               completedMissions: dbMissions,
               balance: balance,
+              burnoutRisk: initialBurnoutRisk,
               lastKnownTime: Date.now(),
             });
           }
@@ -1000,13 +1418,19 @@ export const useAppStore = create<AppState>((set, get) => {
         currentActiveMission: null,
         missionTimeLeft: 0,
         isTimeTampered: false,
-        socialUsage: {
-          TikTok: 100,
-          Instagram: 134,
-          YouTube: 45,
-          Snapchat: 20,
-          Facebook: 15,
-        },
+        socialUsage: initialSocialUsage,
+        observationStartedAt: null,
+        observationComplete: false,
+        behaviorEvents: [],
+        moodCheckIns: [],
+        screenUsageSnapshots: [],
+        activitySnapshots: [],
+        burnoutRisk: initialBurnoutRisk,
+        recoveryPlan: null,
+        recoverySessions: [],
+        buddyGroup: initialBuddyGroup,
+        recoveryTree: initialRecoveryTree,
+        encouragementMessages: [],
       });
       AsyncStorage.removeItem(STORAGE_KEY);
       AsyncStorage.removeItem(KEYS.USER);

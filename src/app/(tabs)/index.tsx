@@ -33,7 +33,11 @@ export default function DashboardScreen() {
     fetchOnlineBuddyUpdates,
     socialUsage,
     checkSystemLocks,
-    logManualSocialUsage
+    logManualSocialUsage,
+    burnoutRisk,
+    recoveryPlan,
+    recoveryTree,
+    generateRecoveryPlan
   } = useAppStore();
 
   React.useEffect(() => {
@@ -99,16 +103,26 @@ export default function DashboardScreen() {
     return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
   };
 
-  const recoveryScore = Math.max(0, Math.min(100, Math.round(100 - balance.recoveryDebt * 0.4)));
+  const recoveryScore = burnoutRisk.recoveryScore;
   const state = recoveryScore >= 76 ? 'good' : recoveryScore >= 52 ? 'neutral' : 'bad';
-  const stateLabel = recoveryScore >= 76 ? 'Balanced' : recoveryScore >= 52 ? 'Recovering' : 'Needs Reset';
+  const stateLabel = burnoutRisk.status;
   const stateCopy = recoveryScore >= 76 ? 'Nice rhythm today.' : recoveryScore >= 52 ? 'A short reset helps.' : 'Pause and recharge.';
   const displayName = user.name && user.name !== 'Demb Cadet' ? user.name : 'Dagim';
   const activeMission = missions[1] ?? missions[0];
   const challengeProgress = 0.62;
+  const mainCause = burnoutRisk.causes[0] ?? 'steady recovery rhythm';
+  const currentPlan = recoveryPlan ?? undefined;
+  const planTask = currentPlan?.recoveryTasks[0];
 
   const startMission = () => {
     router.push({ pathname: '/mission', params: { missionId: activeMission?.id ?? 'm1' } });
+  };
+
+  const openPlan = () => {
+    if (!recoveryPlan) {
+      generateRecoveryPlan();
+    }
+    router.push('/plan');
   };
 
   const totalScreenTimeMins = socialUsage.TikTok + socialUsage.Instagram + socialUsage.YouTube + socialUsage.Snapchat + socialUsage.Facebook;
@@ -207,10 +221,55 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        <View style={styles.burnoutGrid}>
+          <View style={styles.burnoutCard}>
+            <Text style={styles.cardLabel}>Burnout Risk</Text>
+            <Text style={styles.burnoutValue}>{burnoutRisk.burnoutRiskScore}%</Text>
+            <Text style={styles.burnoutMeta}>{stateLabel}</Text>
+          </View>
+          <Pressable style={styles.burnoutCard} onPress={() => router.push('/insights')}>
+            <Text style={styles.cardLabel}>Main Cause Today</Text>
+            <Text style={styles.causeText}>{mainCause}</Text>
+            <Text style={styles.burnoutMeta}>View insights</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.statsRow}>
           <StatCard icon="flame-outline" value={`${streakCount} Days`} label="Streak" />
           <StatCard icon="people-outline" value={`${Math.max(buddies.length, 1)} Buddy`} label="Support" />
           <StatCard icon="gift-outline" value={`${Math.max(completedMissions.length, points > 0 ? 3 : 0)} Unlocked`} label="Rewards" />
+        </View>
+
+        <View style={styles.planCard}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.sectionTitle}>Today's Recovery Plan</Text>
+            <Pressable onPress={openPlan}>
+              <Ionicons name="sparkles-outline" size={22} color="#6D6879" />
+            </Pressable>
+          </View>
+          <View style={styles.planTaskRow}>
+            <View style={styles.challengeIcon}>
+              <Ionicons
+                name={planTask?.type === 'sound_therapy' ? 'musical-notes-outline' : planTask?.type === 'walking' ? 'walk-outline' : 'leaf-outline'}
+                size={24}
+                color="#746D87"
+              />
+            </View>
+            <View style={styles.challengeCopy}>
+              <Text style={styles.challengeTitle}>{planTask?.title ?? 'Generate your personal recovery plan'}</Text>
+              <Text style={styles.miniLabel}>
+                {planTask ? `${planTask.target} · +${planTask.rewardPoints} points` : 'Based on your observation pattern'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.planActions}>
+            <Pressable style={[styles.outlineButton, styles.planButton]} onPress={openPlan}>
+              <Text style={styles.outlineButtonText}>{planTask ? 'View Plan' : 'Generate Plan'}</Text>
+            </Pressable>
+            <Pressable style={[styles.outlineButton, styles.planButton]} onPress={() => router.push('/mood-checkin')}>
+              <Text style={styles.outlineButtonText}>Mood Check-In</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.challengeCard}>
@@ -296,6 +355,19 @@ export default function DashboardScreen() {
             <Text style={styles.outlineButtonText}>View Buddy</Text>
           </Pressable>
         </View>
+
+        <Pressable style={styles.treePreviewCard} onPress={() => router.push('/buddy-tree')}>
+          <View style={styles.treePreviewIcon}>
+            <Ionicons name="leaf" size={28} color="#1b6b4f" />
+          </View>
+          <View style={styles.challengeCopy}>
+            <Text style={styles.challengeTitle}>Buddy Tree</Text>
+            <Text style={styles.miniLabel}>
+              Level {recoveryTree.level} · {recoveryTree.leavesCount} leaves · shared growth
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color="#746D87" />
+        </Pressable>
 
         <View style={styles.quoteCard}>
           <Text style={styles.quoteText}>"Small progress every day creates lasting change."</Text>
@@ -588,6 +660,49 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 32,
   },
+  burnoutGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 24,
+  },
+  burnoutCard: {
+    flex: 1,
+    minHeight: 116,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#ECE9EF',
+    padding: 18,
+    justifyContent: 'center',
+    shadowColor: '#D8D3DE',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+  },
+  burnoutValue: {
+    color: '#69627C',
+    fontSize: 33,
+    lineHeight: 38,
+    fontWeight: '900',
+    marginTop: 6,
+  },
+  burnoutMeta: {
+    color: '#8B8695',
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginTop: 4,
+  },
+  causeText: {
+    color: '#343039',
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '900',
+    marginTop: 8,
+    textTransform: 'capitalize',
+  },
   statCard: {
     width: '31%',
     minHeight: 82,
@@ -627,6 +742,30 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
+  },
+  planCard: {
+    borderRadius: 27,
+    backgroundColor: '#FFFFFF',
+    padding: 24,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#ECE9EF',
+    shadowColor: '#D8D3DE',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+  },
+  planTaskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  planActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  planButton: {
+    flex: 1,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -809,6 +948,30 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
+  },
+  treePreviewCard: {
+    minHeight: 88,
+    borderRadius: 27,
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#ECE9EF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#D8D3DE',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+  },
+  treePreviewIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#a6f2cf',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
   },
   onlineRow: {
     flexDirection: 'row',

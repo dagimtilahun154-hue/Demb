@@ -19,6 +19,7 @@ export default function FocusLockScreen() {
     socialUsage,
     buddies,
     points,
+    burnoutRisk,
     releaseFocusLock,
     startMission,
     isTimeTampered,
@@ -31,8 +32,8 @@ export default function FocusLockScreen() {
       // Returning true blocks the default back action
       return true;
     };
-    BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
   }, []);
 
   const [showQuiz, setShowQuiz] = useState(false);
@@ -48,14 +49,17 @@ export default function FocusLockScreen() {
 
   // Get social time for the active app
   const currentAppTime = restrictedApp === 'Instagram' ? '2h 14m' : '1h 40m';
+  const mainCauseText = burnoutRisk.causes.length > 0
+    ? burnoutRisk.causes.slice(0, 2).join(' + ')
+    : 'digital overload + low recovery';
 
   // Handle critical notifications to buddies
   useEffect(() => {
     if (balance.balanceScore < -50 || balance.recoveryDebt > 50) {
       // Critical usage! Send warning alert about notifying buddy
       Alert.alert(
-        "Critical Usage Alert",
-        `Your recovery score is critical. We've sent an urgent notification to your buddy Abel: "Dagim is scrolling excessively. Give them a task, call them, or meet them."`,
+        "Recovery Support Sent",
+        `Your burnout risk indicators are rising. We sent Abel a supportive nudge: "Dagim may need a reset. Send encouragement or invite them to a short recovery task."`,
         [{ text: "Acknowledge" }]
       );
       
@@ -65,7 +69,7 @@ export default function FocusLockScreen() {
         id: `urgent_${Date.now()}`,
         name: 'Alert',
         event: 'lock' as const,
-        detail: `Dagim is in critical screen usage! Abel is urged to call/meet them.`,
+        detail: `Dagim may need support. Abel is invited to send encouragement or start a shared recovery session.`,
         timestamp: 'Just now'
       };
       useAppStore.setState({ buddyFeed: [urgentItem, ...store.buddyFeed] });
@@ -150,12 +154,12 @@ export default function FocusLockScreen() {
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
         <View style={styles.topGradientGlow} />
         <Ionicons name="warning" size={80} color="#EF4444" style={{ marginBottom: 24 }} />
-        <Text style={[styles.shieldTitle, { textAlign: 'center', color: '#EF4444' }]}>Tamper Lockout Activated</Text>
+        <Text style={[styles.shieldTitle, { textAlign: 'center', color: '#EF4444' }]}>Recovery Shield Needs Clock Sync</Text>
         <Text style={[styles.shieldDescription, { textAlign: 'center', marginBottom: 20 }]}>
-          Officer Demb detected manual manipulation of the system clock. Bypassing wellness limits is not permitted.
+          Demb noticed a clock change and paused wellness rules until time can be verified.
         </Text>
         <Text style={[styles.shieldSubDescription, { textAlign: 'center', color: '#EF4444', fontWeight: 'bold' }]}>
-          Incident logged and reported to your buddy Abel.
+          Your buddy can support you while Demb restores a stable rhythm.
         </Text>
         <Pressable 
           style={[styles.primaryBtn, { backgroundColor: '#EF4444', marginTop: 32 }]} 
@@ -216,18 +220,18 @@ export default function FocusLockScreen() {
         </View>
 
         {/* Title Block */}
-        <Text style={styles.shieldTitle}>Demb Shield</Text>
+        <Text style={styles.shieldTitle}>Recovery Shield Active</Text>
         <Text style={styles.shieldDescription}>
-          Pause first. Take a quick recovery break.
+          Your burnout risk is rising.
         </Text>
         <Text style={styles.shieldSubDescription}>
-          Protect your time and focus.
+          Main cause: {mainCauseText}.
         </Text>
 
         {/* Time Limit Badge */}
         <View style={styles.timeBadge}>
           <Ionicons name="time-outline" size={16} color="#FFE4E1" style={{ marginRight: 6 }} />
-          <Text style={styles.timeBadgeText}>{currentAppTime} On {restrictedApp || 'Social Media'} Today</Text>
+          <Text style={styles.timeBadgeText}>{currentAppTime} On {restrictedApp || 'Digital Overload'} Today</Text>
         </View>
 
         {/* Buddy Streak Banner */}
@@ -250,7 +254,7 @@ export default function FocusLockScreen() {
             <Text style={styles.cardHeaderTitle}>Recovery Challenge</Text>
           </View>
           <Text style={styles.cardBodyText}>
-            Complete a reset task to unlock.
+            Complete a reset task to return to a steadier state.
           </Text>
           
           <View style={styles.iconSelectionRow}>
@@ -266,7 +270,7 @@ export default function FocusLockScreen() {
           </View>
 
           <Pressable style={styles.primaryBtn} onPress={handleStartRecovery}>
-            <Text style={styles.primaryBtnText}>Start Recovery</Text>
+            <Text style={styles.primaryBtnText}>Start Recovery Challenge</Text>
           </Pressable>
         </View>
 
@@ -279,7 +283,7 @@ export default function FocusLockScreen() {
             <Text style={styles.cardHeaderTitle}>Return To What Matters</Text>
           </View>
           <Text style={styles.cardBodyText}>
-            Return to offline balance.
+            Return to one meaningful offline action.
           </Text>
 
           <View style={styles.iconSelectionRow}>
@@ -295,13 +299,13 @@ export default function FocusLockScreen() {
           </View>
 
           <Pressable style={styles.secondaryBtn} onPress={handleContinuePrevious}>
-            <Text style={styles.secondaryBtnText}>Continue Previous Activity</Text>
+            <Text style={styles.secondaryBtnText}>Return To What Matters</Text>
           </Pressable>
         </View>
 
         {/* Footer */}
         <Text style={styles.footerNote}>
-          Demb helps you return to life.
+          Demb helps you protect your energy without shame.
         </Text>
       </ScrollView>
 
