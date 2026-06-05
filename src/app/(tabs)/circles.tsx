@@ -17,6 +17,7 @@ type FlamePalette = {
   core: string;
   glow: string;
   haze: string;
+  focus: string;
   surface: string;
   border: string;
   text: string;
@@ -105,8 +106,9 @@ export default function WellnessCirclesScreen() {
   const palette = getFlamePalette({ colors, isDark, isCritical, streakUnlocked, effortScore });
   const smallFlameCount = streakUnlocked ? Math.min(4, buddyMembers.length) : 0;
   const mainFlameSize = streakUnlocked
-    ? Math.min(380, 245 + effortScore * 1.25 + Math.min(personalStreak, 14) * 3)
-    : 220;
+    ? Math.min(420, 285 + effortScore * 1.18 + Math.min(personalStreak, 14) * 3)
+    : 250;
+  const friendStreak = buddyGroup.groupStreak;
 
   const label = isCritical
     ? 'Critical'
@@ -136,6 +138,8 @@ export default function WellnessCirclesScreen() {
         mainSize={mainFlameSize}
         smallFlameCount={smallFlameCount}
         streakUnlocked={streakUnlocked}
+        personalStreak={streakUnlocked ? personalStreak : 1}
+        friendStreak={friendStreak}
       />
 
       <ScrollView
@@ -152,10 +156,6 @@ export default function WellnessCirclesScreen() {
           <View>
             <Text style={[styles.title, { color: palette.text }]}>Buddies</Text>
             <Text style={[styles.microLabel, { color: palette.muted }]}>{label} flame</Text>
-          </View>
-          <View style={[styles.streakBadge, { backgroundColor: palette.haze, borderColor: palette.border }]}>
-            <Ionicons name="flame-outline" size={15} color={palette.text} />
-            <Text style={[styles.streakText, { color: palette.text }]}>{streakUnlocked ? personalStreak : 1}</Text>
           </View>
         </View>
 
@@ -196,7 +196,7 @@ export default function WellnessCirclesScreen() {
         <View style={styles.statsRow}>
           <MiniStat value={`${effortScore}%`} label="Effort" color={palette.text} muted={palette.muted} />
           <MiniStat value={`${buddyMembers.length}`} label="Buddies" color={palette.text} muted={palette.muted} />
-          <MiniStat value={streakUnlocked ? `${personalStreak}` : '1'} label="Streak" color={palette.text} muted={palette.muted} />
+          <MiniStat value={`${burnoutRisk.recoveryScore}%`} label="Score" color={palette.text} muted={palette.muted} />
         </View>
 
         {pendingIncoming.length > 0 && (
@@ -262,6 +262,8 @@ function FlameBackground({
   mainSize,
   smallFlameCount,
   streakUnlocked,
+  personalStreak,
+  friendStreak,
 }: {
   palette: FlamePalette;
   members: BuddyDisplay[];
@@ -269,41 +271,46 @@ function FlameBackground({
   mainSize: number;
   smallFlameCount: number;
   streakUnlocked: boolean;
+  personalStreak: number;
+  friendStreak: number;
 }) {
   const stageMembers = members.slice(0, 6);
-  const smallFlames = [
-    { left: '13%', top: 290, size: 110 },
-    { left: '66%', top: 300, size: 112 },
-    { left: '25%', top: 420, size: 92 },
-    { left: '62%', top: 440, size: 90 },
+  const clusterFlames = [
+    { xOffset: -172, top: 378, size: 124 },
+    { xOffset: 54, top: 382, size: 126 },
+    { xOffset: -118, top: 462, size: 96 },
+    { xOffset: 76, top: 464, size: 96 },
   ];
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <View style={[styles.fireFocusPanel, { backgroundColor: palette.focus, borderColor: palette.border }]} />
       <View style={[styles.backgroundWash, { backgroundColor: palette.haze }]} />
       <AnimatedFlame
         id="main"
         palette={palette}
         size={mainSize}
         left="50%"
-        top={190}
+        top={170}
         xOffset={-mainSize / 2}
         intensity={0.95 + effortScore / 360}
       />
       {streakUnlocked &&
-        smallFlames.slice(0, smallFlameCount).map((flame, index) => (
+        clusterFlames.slice(0, smallFlameCount).map((flame, index) => (
           <AnimatedFlame
-            key={`${flame.left}-${index}`}
+            key={`${flame.xOffset}-${index}`}
             id={`small_${index}`}
             palette={palette}
             size={flame.size}
-            left={flame.left}
+            left="50%"
             top={flame.top}
-            xOffset={0}
+            xOffset={flame.xOffset}
             intensity={0.8 + index * 0.07}
             delay={index * 180}
           />
         ))}
+      <CampfireStreaks palette={palette} personalStreak={personalStreak} friendStreak={friendStreak} />
+      <CampfireLogs palette={palette} />
       {stageMembers.map((member, index) => (
         <FloatingBuddyName key={member.id} member={member} index={index} palette={palette} />
       ))}
@@ -449,15 +456,71 @@ function FlameSvg({ id, palette }: { id: string; palette: FlamePalette }) {
   );
 }
 
+function CampfireStreaks({
+  palette,
+  personalStreak,
+  friendStreak,
+}: {
+  palette: FlamePalette;
+  personalStreak: number;
+  friendStreak: number;
+}) {
+  return (
+    <View style={styles.streakCenter}>
+      <View style={[styles.streakCenterPill, { backgroundColor: 'rgba(255,255,255,0.76)', borderColor: palette.border }]}>
+        <Text style={[styles.streakNumber, { color: palette.text }]}>{personalStreak}</Text>
+        <Text style={[styles.streakLabel, { color: palette.muted }]}>You</Text>
+      </View>
+      <View style={[styles.streakCenterPill, { backgroundColor: 'rgba(255,255,255,0.76)', borderColor: palette.border }]}>
+        <Text style={[styles.streakNumber, { color: palette.text }]}>{friendStreak}</Text>
+        <Text style={[styles.streakLabel, { color: palette.muted }]}>Friends</Text>
+      </View>
+    </View>
+  );
+}
+
+function CampfireLogs({ palette }: { palette: FlamePalette }) {
+  return (
+    <View style={styles.logsLayer}>
+      <Svg width="240" height="96" viewBox="0 0 240 96">
+        <Defs>
+          <LinearGradient id="logA" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#9a6a42" />
+            <Stop offset="56%" stopColor="#6c4328" />
+            <Stop offset="100%" stopColor="#3c2418" />
+          </LinearGradient>
+          <LinearGradient id="logB" x1="100%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor="#b17b4b" />
+            <Stop offset="62%" stopColor="#75462b" />
+            <Stop offset="100%" stopColor="#3f271a" />
+          </LinearGradient>
+        </Defs>
+        <Ellipse cx="120" cy="76" rx="92" ry="14" fill={palette.outer} opacity="0.14" />
+        <G transform="rotate(-13 118 62)">
+          <Path d="M44 50 H188 C199 50 208 58 208 68 C208 78 199 86 188 86 H44 C33 86 24 78 24 68 C24 58 33 50 44 50 Z" fill="url(#logA)" />
+          <Ellipse cx="44" cy="68" rx="20" ry="18" fill="#c08b5d" />
+          <Ellipse cx="44" cy="68" rx="11" ry="10" fill="#6e4328" opacity="0.68" />
+        </G>
+        <G transform="rotate(13 122 62)">
+          <Path d="M52 44 H196 C207 44 216 52 216 62 C216 72 207 80 196 80 H52 C41 80 32 72 32 62 C32 52 41 44 52 44 Z" fill="url(#logB)" />
+          <Ellipse cx="196" cy="62" rx="20" ry="18" fill="#c99461" />
+          <Ellipse cx="196" cy="62" rx="11" ry="10" fill="#6d4228" opacity="0.7" />
+        </G>
+        <Path d="M92 34 C112 20 131 20 150 34" stroke={palette.mid} strokeWidth="6" strokeLinecap="round" opacity="0.32" />
+      </Svg>
+    </View>
+  );
+}
+
 function FloatingBuddyName({ member, index, palette }: { member: BuddyDisplay; index: number; palette: FlamePalette }) {
   const drift = React.useRef(new Animated.Value(0)).current;
   const positions = [
-    { left: '8%', top: 332 },
-    { left: '58%', top: 322 },
-    { left: '18%', top: 472 },
-    { left: '52%', top: 492 },
-    { left: '36%', top: 262 },
-    { left: '36%', top: 575 },
+    { left: '9%', top: 338 },
+    { left: '61%', top: 332 },
+    { left: '15%', top: 500 },
+    { left: '58%', top: 510 },
+    { left: '34%', top: 266 },
+    { left: '35%', top: 612 },
   ];
   const position = positions[index % positions.length];
 
@@ -546,6 +609,7 @@ function getFlamePalette({
       core: '#ffe4e6',
       glow: '#fca5a5',
       haze: isDark ? 'rgba(255, 180, 171, 0.16)' : 'rgba(255, 218, 214, 0.82)',
+      focus: isDark ? 'rgba(96, 51, 56, 0.52)' : '#fff0ef',
       surface: isDark ? '#241318' : '#fff8f8',
       border: isDark ? '#603338' : '#ffe1df',
       text: isDark ? '#ffdad6' : '#7f1616',
@@ -560,6 +624,7 @@ function getFlamePalette({
       core: '#fbf7ff',
       glow: '#d8ccff',
       haze: isDark ? 'rgba(206, 189, 255, 0.14)' : 'rgba(232, 221, 255, 0.86)',
+      focus: isDark ? 'rgba(62, 52, 86, 0.58)' : '#f4edff',
       surface: isDark ? colors.surfaceContainer : '#fbf8ff',
       border: isDark ? colors.outlineVariant : '#f0e8ff',
       text: colors.textPrimary,
@@ -574,6 +639,7 @@ function getFlamePalette({
       core: '#ecfdf5',
       glow: '#a6f2cf',
       haze: isDark ? 'rgba(139, 214, 180, 0.18)' : 'rgba(166, 242, 207, 0.72)',
+      focus: isDark ? 'rgba(28, 71, 55, 0.58)' : '#edfff6',
       surface: isDark ? '#122a22' : '#f6fff9',
       border: isDark ? '#2e5f4b' : '#d9fbe9',
       text: isDark ? '#dff8ea' : '#0f513d',
@@ -587,6 +653,7 @@ function getFlamePalette({
     core: '#f7f1ff',
     glow: '#d8ccff',
     haze: isDark ? 'rgba(206, 189, 255, 0.16)' : 'rgba(232, 221, 255, 0.82)',
+    focus: isDark ? 'rgba(68, 55, 98, 0.6)' : '#f3edff',
     surface: isDark ? '#2f2940' : '#fbf8ff',
     border: isDark ? '#514473' : '#efe8ff',
     text: isDark ? '#efe8ff' : colors.primaryDark,
@@ -600,15 +667,67 @@ const styles = StyleSheet.create({
   },
   backgroundWash: {
     position: 'absolute',
-    top: 95,
-    left: -40,
-    right: -40,
-    height: 640,
-    opacity: 0.9,
-    borderRadius: 88,
+    top: 150,
+    left: 32,
+    right: 32,
+    height: 500,
+    opacity: 0.72,
+    borderRadius: 56,
+  },
+  fireFocusPanel: {
+    position: 'absolute',
+    top: 118,
+    left: Spacing.three,
+    right: Spacing.three,
+    height: 610,
+    borderRadius: 52,
+    borderWidth: 1,
+    shadowColor: '#4f319c',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.12,
+    shadowRadius: 34,
   },
   flameLayer: {
     position: 'absolute',
+  },
+  logsLayer: {
+    position: 'absolute',
+    top: 585,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  streakCenter: {
+    position: 'absolute',
+    top: 374,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
+  streakCenterPill: {
+    width: 82,
+    height: 68,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3A3546',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+  },
+  streakNumber: {
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: '900',
+  },
+  streakLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    marginTop: 2,
   },
   nameFloat: {
     position: 'absolute',
@@ -684,7 +803,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   flameSpace: {
-    height: 520,
+    height: 640,
   },
   statsRow: {
     flexDirection: 'row',
@@ -694,9 +813,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 72,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.68)',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
+    borderColor: '#ECE9EF',
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadows.card,
