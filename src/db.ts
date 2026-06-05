@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 let SQLite: any = null;
 let dbSync: any = null;
@@ -6,7 +7,8 @@ let dbAsync: any = null;
 let isSQLiteAvailable = false;
 
 try {
-  SQLite = require('expo-sqlite');
+  const nativeRequire = eval('require');
+  SQLite = Platform.OS === 'web' ? null : nativeRequire('expo-sqlite');
   if (SQLite) {
     // Attempt Expo SDK 50+ SQLite API
     if (SQLite.openDatabaseSync) {

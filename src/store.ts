@@ -30,8 +30,23 @@ import type {
   RecoveryTree,
   ScreenUsageSnapshot,
 } from './types/burnout';
+import { NativeModules, Platform } from 'react-native';
 import { buildRiskInputFromSignals, calculateBurnoutRisk } from './utils/burnoutEngine';
-import { generateMockRecoveryPlan } from './utils/mockAiPlan';
+import { generateAiRecoveryPlan } from './utils/mockAiPlan';
+import { getSyncBiometrics, requestSmartwatchPermissions } from './utils/healthConnect';
+import {
+  fetchBuddyFeed,
+  fetchUserProfile,
+  getCachedAuthUser,
+  pushBuddyFeedEvent,
+  signInWithEmail,
+  signOutSupabase,
+  signUpWithEmail,
+  syncRecoveryTree,
+  syncUserProfile,
+} from './utils/supabaseClient';
+
+const { DembBlockerModule } = NativeModules;
 
 export interface EnergyLog {
   id: string;
@@ -46,6 +61,7 @@ export interface EnergyLog {
 }
 
 export interface UserProfile {
+  id: string;
   name: string;
   email: string;
   profileType: 'student' | 'employee' | 'entrepreneur' | 'parent' | 'other' | '';
@@ -110,6 +126,11 @@ export interface BuddyFeedItem {
 }
 
 export interface AppState {
+  authReady: boolean;
+  authStatus: 'signed_out' | 'signed_in';
+  authUserId: string | null;
+  authError: string | null;
+
   // User Profile
   user: UserProfile;
   
@@ -134,7 +155,7 @@ export interface AppState {
   screenOffTargetDuration: number; // seconds
   screenOffInterrupted: boolean;
   
-  // Break Loop Timer
+  // Focus Timer
   breakLoopActive: boolean;
   breakLoopTime: number; // in seconds
   
@@ -144,6 +165,7 @@ export interface AppState {
   
   // App Modes / Locks
   focusLockActive: boolean;
+  focusLockScreenVisible: boolean;
   restrictedApp: string; // e.g. 'TikTok', 'Instagram', 'Sleep Lockout'
   focusLockTimeLeft: number; // seconds
   currentActiveMission: RecoveryMission | null;
@@ -178,6 +200,10 @@ export interface AppState {
   encouragementMessages: EncouragementMessage[];
   
   // Actions
+  hydrateAuthSession: () => Promise<void>;
+  signUp: (input: { name: string; email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
+  signIn: (input: { email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
+  signOut: () => Promise<void>;
   setOnboarding: (profile: Partial<UserProfile>) => void;
   addEnergyLog: (log: Omit<EnergyLog, 'id' | 'createdAt' | 'scoreValue'>) => void;
   deleteEnergyLog: (id: string) => void;
@@ -189,7 +215,7 @@ export interface AppState {
   completeMission: () => void;
   cancelMission: () => void;
   
-  // Break Loop Actions
+  // Focus Actions
   toggleBreakLoop: () => void;
   tickBreakLoop: () => void;
   
@@ -207,7 +233,7 @@ export interface AppState {
   verifyScreenOff: () => { success: boolean; elapsedSeconds: number };
   
   // Focus Lock / Blocker Actions
-  triggerFocusLock: (appName: string, durationSeconds?: number) => void;
+  triggerFocusLock: (appName: string, durationSeconds?: number, options?: { showScreen?: boolean }) => void;
   tickFocusLock: () => void;
   extendFocusLock: (seconds: number) => void;
   releaseFocusLock: () => void;
@@ -294,6 +320,7 @@ const DEFAULT_MISSIONS: RecoveryMission[] = [
 ];
 
 const initialProfile: UserProfile = {
+  id: '',
   name: '',
   email: '',
   profileType: '',
@@ -304,58 +331,55 @@ const initialProfile: UserProfile = {
 };
 
 const initialBalance: DailyBalance = {
-  energySpent: 87,
-  energyRecovered: 41,
-  balanceScore: -46,
-  recoveryDebt: 46,
-  burnoutRisk: 'Moderate',
-  focusLevel: 65,
+  energySpent: 0,
+  energyRecovered: 0,
+  balanceScore: 0,
+  recoveryDebt: 0,
+  burnoutRisk: 'Low',
+  focusLevel: 100,
 };
 
 const initialSocialUsage = {
-  TikTok: 100,
-  Instagram: 134,
-  YouTube: 45,
-  Snapchat: 20,
-  Facebook: 15,
+  TikTok: 0,
+  Instagram: 0,
+  YouTube: 0,
+  Snapchat: 0,
+  Facebook: 0,
 };
 
 const initialBurnoutRisk = calculateBurnoutRisk(
   buildRiskInputFromSignals({
     totalScreenTimeMins: Object.values(initialSocialUsage).reduce((sum, mins) => sum + mins, 0),
     highDopamineMinutes: initialSocialUsage.TikTok + initialSocialUsage.Instagram + initialSocialUsage.Snapchat,
-    appSwitchCount: 72,
-    nightScreenTime: 38,
-    stepsWalked: 2200,
-    sedentaryMinutes: 420,
-    sleepHours: 6.2,
-    moodScore: 6,
-    stressScore: 7,
-    energyScore: 5,
+    appSwitchCount: 0,
+    nightScreenTime: 0,
+    stepsWalked: 0,
+    sedentaryMinutes: 0,
+    sleepHours: 7,
+    moodScore: 7,
+    stressScore: 3,
+    energyScore: 7,
     recoverySessionsCompleted: 0,
-    buddySupportReceived: 1,
+    buddySupportReceived: 0,
   })
 );
 
 const initialRecoveryTree: RecoveryTree = {
-  id: 'tree_demb_squad',
-  level: 2,
-  leavesCount: 12,
-  branchesCount: 1,
+  id: 'local_tree',
+  level: 1,
+  leavesCount: 0,
+  branchesCount: 0,
   flowersCount: 0,
   fruitsCount: 0,
   growthStage: 'young_tree',
 };
 
 const initialBuddyGroup: BuddyGroup = {
-  id: 'group_demb_patrol',
-  name: 'Demb Patrol Squad',
-  groupStreak: 12,
+  id: 'local_group',
+  name: 'My Buddies',
+  groupStreak: 0,
   members: [
-    { id: 'me', name: 'You', personalStreak: 5, recoveryScore: initialBurnoutRisk.recoveryScore, currentState: initialBurnoutRisk.status, treeContribution: 4 },
-    { id: 'alex', name: 'Alex', personalStreak: 9, recoveryScore: 78, currentState: 'Balanced', treeContribution: 3 },
-    { id: 'sarah', name: 'Sarah', personalStreak: 12, recoveryScore: 48, currentState: 'At Risk', treeContribution: 5 },
-    { id: 'jessica', name: 'Jessica', personalStreak: 4, recoveryScore: 70, currentState: 'Draining', treeContribution: 2 },
+    { id: 'me', name: 'You', personalStreak: 0, recoveryScore: initialBurnoutRisk.recoveryScore, currentState: initialBurnoutRisk.status, treeContribution: 0 },
   ],
 };
 
@@ -368,8 +392,8 @@ export const ENCOURAGEMENT_MESSAGES = [
 ];
 
 const recalculateBalance = (logs: EnergyLog[]): DailyBalance => {
-  let spent = 87; // seed values
-  let recovered = 41;
+  let spent = 0;
+  let recovered = 0;
 
   logs.forEach(log => {
     if (log.type === 'spent') {
@@ -439,23 +463,24 @@ export const useAppStore = create<AppState>((set, get) => {
 
   return {
     // State
+    authReady: false,
+    authStatus: 'signed_out',
+    authUserId: null,
+    authError: null,
+
     user: initialProfile,
     balance: initialBalance,
-    points: 50,
-    streakCount: 5,
+    points: 0,
+    streakCount: 0,
     energyLogs: [],
     priorities: null,
     eveningReviews: [],
     missions: DEFAULT_MISSIONS,
     completedMissions: [],
     
-    // Buddy system seed data
-    buddies: ['Alex', 'Sarah', 'Jessica'],
+    buddies: [],
     buddyRequests: [],
-    buddyFeed: [
-      { id: 'f1', name: 'Alex', event: 'success', detail: 'completed a 10m Nature Walk!', timestamp: '2 mins ago' },
-      { id: 'f2', name: 'Sarah', event: 'lock', detail: 'is stuck on Instagram. Cheer them on!', timestamp: '5 mins ago' }
-    ],
+    buddyFeed: [],
     
     stepsWalked: 0,
     screenOffStartTime: null,
@@ -466,6 +491,7 @@ export const useAppStore = create<AppState>((set, get) => {
     breakLoopTime: 0,
     
     focusLockActive: false,
+    focusLockScreenVisible: false,
     restrictedApp: '',
     focusLockTimeLeft: 0,
     currentActiveMission: null,
@@ -490,6 +516,98 @@ export const useAppStore = create<AppState>((set, get) => {
     recoveryTree: initialRecoveryTree,
     encouragementMessages: [],
     
+    hydrateAuthSession: async () => {
+      const authUser = await getCachedAuthUser();
+      if (!authUser) {
+        set({ authReady: true, authStatus: 'signed_out', authUserId: null });
+        return;
+      }
+
+      const cachedUser = await getDbUser();
+      const onlineProfile = await fetchUserProfile(authUser.id);
+      const fallbackName =
+        (authUser.user_metadata?.name as string | undefined) ||
+        authUser.email?.split('@')[0] ||
+        '';
+      const userProfile: UserProfile = {
+        ...initialProfile,
+        ...cachedUser,
+        id: authUser.id,
+        email: authUser.email ?? cachedUser?.email ?? '',
+        name: onlineProfile?.name || cachedUser?.name || fallbackName,
+      };
+
+      set({
+        authReady: true,
+        authStatus: 'signed_in',
+        authUserId: authUser.id,
+        user: userProfile,
+      });
+      await saveDbUser(userProfile);
+      await saveState({ user: userProfile });
+    },
+
+    signUp: async ({ name, email, password }) => {
+      const result = await signUpWithEmail({ name, email, password });
+      if (!result.user) {
+        const error = result.error ?? 'Registration failed. Check your connection and try again.';
+        set({ authError: error });
+        return { ok: false, error };
+      }
+
+      const userProfile: UserProfile = {
+        ...initialProfile,
+        id: result.user.id,
+        name,
+        email,
+        isOnboarded: false,
+      };
+      set({ authReady: true, authStatus: 'signed_in', authUserId: result.user.id, authError: null, user: userProfile });
+      await saveDbUser(userProfile);
+      await saveState({ user: userProfile });
+      return { ok: true };
+    },
+
+    signIn: async ({ email, password }) => {
+      const result = await signInWithEmail({ email, password });
+      if (!result.user) {
+        const error = result.error ?? 'Sign in failed. Check your connection and try again.';
+        set({ authError: error });
+        return { ok: false, error };
+      }
+
+      const cachedUser = await getDbUser();
+      const onlineProfile = await fetchUserProfile(result.user.id);
+      const fallbackName =
+        (result.user.user_metadata?.name as string | undefined) ||
+        result.user.email?.split('@')[0] ||
+        '';
+      const userProfile: UserProfile = {
+        ...initialProfile,
+        ...cachedUser,
+        id: result.user.id,
+        email: result.user.email ?? email,
+        name: onlineProfile?.name || cachedUser?.name || fallbackName,
+      };
+      set({ authReady: true, authStatus: 'signed_in', authUserId: result.user.id, authError: null, user: userProfile });
+      await saveDbUser(userProfile);
+      await saveState({ user: userProfile });
+      return { ok: true };
+    },
+
+    signOut: async () => {
+      await signOutSupabase();
+      set({
+        authStatus: 'signed_out',
+        authUserId: null,
+        authError: null,
+        user: initialProfile,
+        observationComplete: false,
+      });
+      await saveDbUser(initialProfile);
+      await saveState({ user: initialProfile, observationComplete: false });
+    },
+
     // Onboarding Action
     setOnboarding: async (profileData) => {
       const updatedUser = { 
@@ -504,6 +622,13 @@ export const useAppStore = create<AppState>((set, get) => {
       
       // Queue sync item
       await queueSyncItem('onboarding_update', { name: updatedUser.name, intensity: updatedUser.recoveryIntensity });
+      await syncUserProfile({
+        id: updatedUser.id || get().authUserId || updatedUser.email || 'local-user',
+        name: updatedUser.name,
+        recovery_score: get().burnoutRisk.recoveryScore,
+        streak_count: get().streakCount,
+        current_status: get().burnoutRisk.status,
+      });
       get().startObservation();
       get().triggerSync();
     },
@@ -802,19 +927,15 @@ export const useAppStore = create<AppState>((set, get) => {
       const active = get().breakLoopActive;
       if (!active) {
         const risk = get().refreshBurnoutRisk();
-        set({
-          breakLoopActive: true,
-          breakLoopTime: 0,
-          focusLockActive: true,
-          restrictedApp: risk.burnoutRiskScore >= 70 ? 'Burnout Risk Rising' : 'Break Loop',
-          focusLockTimeLeft: 10 * 60,
-        });
+        const label = risk.burnoutRiskScore >= 70 ? 'Burnout Risk Rising' : 'Focus Session';
+        get().triggerFocusLock(label, 40 * 60, { showScreen: false });
+        set({ breakLoopActive: true, breakLoopTime: 0 });
         get().recordBehaviorEvent({
           type: 'shield_triggered',
-          payload: { source: 'manual_break_loop', riskScore: risk.burnoutRiskScore },
+          payload: { source: 'manual_focus_session', riskScore: risk.burnoutRiskScore },
         });
       } else {
-        set({ breakLoopActive: false });
+        get().releaseFocusLock();
       }
     },
 
@@ -826,31 +947,18 @@ export const useAppStore = create<AppState>((set, get) => {
 
     fetchOnlineBuddyUpdates: async () => {
       try {
-        const response = await fetch('https://jsonplaceholder.typicode.com/comments?_limit=3');
-        const data = await response.json();
-        const names = ['Abel', 'Sarah', 'Alex', 'Jessica'];
-        const events: ('success' | 'lock' | 'cheer')[] = ['success', 'lock', 'cheer'];
-        const details = [
-          'completed a 10m Nature Walk!',
-          'is stuck on Instagram. Cheer them on!',
-          'just registered a 12-day streak!',
-          'completed their Breathing Gap session!'
-        ];
-        
-        const newItems: BuddyFeedItem[] = data.map((item: any, idx: number) => ({
-          id: `online_${item.id}_${Date.now()}`,
-          name: names[idx % names.length],
-          event: events[idx % events.length],
-          detail: `${details[idx % details.length]} ("${item.name.split(' ')[0]}")`,
-          timestamp: 'Just now (online)'
-        }));
-        
+        const userId = get().authUserId || get().user.id || get().user.email || 'local-user';
+        const newItems = await fetchBuddyFeed(userId);
+        if (newItems.length === 0) {
+          return;
+        }
+
         const currentFeed = get().buddyFeed;
         const updatedFeed = [...newItems, ...currentFeed].slice(0, 15);
         set({ buddyFeed: updatedFeed });
-        saveState({ buddyFeed: updatedFeed });
+        await saveState({ buddyFeed: updatedFeed });
       } catch (err) {
-        console.log('Failed to fetch online buddy updates', err);
+        console.log('[Supabase] Buddy feed refresh skipped:', err);
       }
     },
     
@@ -892,14 +1000,12 @@ export const useAppStore = create<AppState>((set, get) => {
       
       const elapsedMs = Date.now() - startTime;
       const elapsedSeconds = Math.floor(elapsedMs / 1000);
-      
       if (elapsedSeconds >= target) {
         set({
           screenOffStartTime: null,
           screenOffTargetDuration: 0,
           screenOffInterrupted: false,
         });
-        
         get().completeMission();
         return { success: true, elapsedSeconds };
       } else {
@@ -911,12 +1017,20 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    triggerFocusLock: (appName, durationSeconds = 600) => {
+    triggerFocusLock: (appName, durationSeconds = 600, options = {}) => {
       set({
         focusLockActive: true,
+        focusLockScreenVisible: options.showScreen ?? true,
         restrictedApp: appName,
         focusLockTimeLeft: durationSeconds,
       });
+      if (Platform.OS === 'android' && DembBlockerModule) {
+        try {
+          DembBlockerModule.setLockState(true, appName);
+        } catch (e) {
+          console.log('[NativeBlocker] Error setting lock active:', e);
+        }
+      }
     },
 
     tickFocusLock: () => {
@@ -935,12 +1049,22 @@ export const useAppStore = create<AppState>((set, get) => {
     releaseFocusLock: () => {
       set({
         focusLockActive: false,
+        focusLockScreenVisible: false,
         restrictedApp: '',
         focusLockTimeLeft: 0,
+        breakLoopActive: false,
+        breakLoopTime: 0,
       });
+      if (Platform.OS === 'android' && DembBlockerModule) {
+        try {
+          DembBlockerModule.setLockState(false, '');
+        } catch (e) {
+          console.log('[NativeBlocker] Error releasing lock:', e);
+        }
+      }
     },
 
-    // MANUAL LOG OF SOCIAL USAGE (To simulate real phone tracking activity in-app)
+    // Local fallback until native usage events are available from the Android blocker module.
     logManualSocialUsage: async (app, minutes) => {
       // 1. Write to database log history
       await addSocialUsageLog(app, minutes);
@@ -1067,20 +1191,49 @@ export const useAppStore = create<AppState>((set, get) => {
       const highDopamineMinutes =
         latestScreen?.highDopamineAppMinutes ?? usage.TikTok + usage.Instagram + usage.Snapchat;
 
+      // Background biometric sync
+      getSyncBiometrics().then(biometrics => {
+        const currentSteps = get().stepsWalked;
+        let changed = false;
+        const updates: Partial<AppState> = {};
+
+        if (biometrics.steps > currentSteps) {
+          updates.stepsWalked = biometrics.steps;
+          changed = true;
+        }
+
+        if (latestActivity && latestActivity.sleepHours !== biometrics.sleepHours) {
+          const updatedAct = {
+            ...latestActivity,
+            stepCount: biometrics.steps,
+            sleepHours: biometrics.sleepHours,
+          };
+          updates.activitySnapshots = [updatedAct, ...get().activitySnapshots.slice(1)];
+          changed = true;
+        }
+
+        if (changed) {
+          set(updates);
+          saveState(updates);
+        }
+      }).catch(err => {
+        console.log('[Store] Background biometrics fetch skipped:', err);
+      });
+
       const risk = calculateBurnoutRisk(
         buildRiskInputFromSignals({
           totalScreenTimeMins,
           highDopamineMinutes,
-          appSwitchCount: latestScreen?.appSwitchCount ?? 72,
-          nightScreenTime: latestScreen?.nightScreenTime ?? 38,
-          stepsWalked: Math.max(get().stepsWalked, latestActivity?.stepCount ?? 2200),
-          sedentaryMinutes: latestActivity?.sedentaryMinutes ?? 420,
-          sleepHours: latestActivity?.sleepHours ?? 6.2,
-          moodScore: latestMood?.moodScore ?? 6,
-          stressScore: latestMood?.stressScore ?? 7,
-          energyScore: latestMood?.energyScore ?? 5,
+          appSwitchCount: latestScreen?.appSwitchCount ?? 0,
+          nightScreenTime: latestScreen?.nightScreenTime ?? 0,
+          stepsWalked: Math.max(get().stepsWalked, latestActivity?.stepCount ?? 0),
+          sedentaryMinutes: latestActivity?.sedentaryMinutes ?? 0,
+          sleepHours: latestActivity?.sleepHours ?? 7,
+          moodScore: latestMood?.moodScore ?? 7,
+          stressScore: latestMood?.stressScore ?? 3,
+          energyScore: latestMood?.energyScore ?? 7,
           recoverySessionsCompleted: get().recoverySessions.length + get().completedMissions.length,
-          buddySupportReceived: Math.max(1, get().encouragementMessages.length),
+          buddySupportReceived: get().encouragementMessages.length,
         })
       );
 
@@ -1106,11 +1259,30 @@ export const useAppStore = create<AppState>((set, get) => {
 
     generateRecoveryPlan: () => {
       const risk = get().refreshBurnoutRisk();
-      const plan = generateMockRecoveryPlan({
-        userId: get().user.email || get().user.name || 'local-user',
+      const { generateLocalRecoveryPlan } = require('./utils/mockAiPlan');
+      const plan = generateLocalRecoveryPlan({
+        userId: get().authUserId || get().user.id || get().user.email || 'local-user',
         risk,
       });
       set({ recoveryPlan: plan });
+      
+      getSyncBiometrics().then(biometrics => {
+        generateAiRecoveryPlan({
+          userId: get().authUserId || get().user.id || get().user.email || 'local-user',
+          risk,
+          userProfile: get().user,
+          latestBiometrics: biometrics,
+        }).then(aiPlan => {
+          set({ recoveryPlan: aiPlan });
+          saveState({ recoveryPlan: aiPlan });
+          console.log('[Store] Cloud AI plan generated and cached successfully');
+        }).catch(err => {
+          console.log('[Store] Cloud AI plan failed to generate:', err);
+        });
+      }).catch(err => {
+        console.log('[Store] Background biometrics fetch failed for AI plan:', err);
+      });
+
       get().recordBehaviorEvent({
         type: 'plan_rule_executed',
         payload: { planId: plan.planId, riskLevel: plan.riskLevel },
@@ -1154,6 +1326,13 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ recoverySessions, energyLogs, balance, points });
       await addDbLog(recoveryLog);
       get().addBuddyTreeLeaf(1);
+
+      pushBuddyFeedEvent(
+        get().user.name || 'Anonymous Buddy',
+        'success',
+        `completed a ${task.durationMinutes}m ${task.title}!`
+      ).catch(e => console.log('[Supabase] Feed event push skipped:', e));
+
       get().recordBehaviorEvent({
         type: 'recovery_session_completed',
         payload: { taskId: task.id, taskType: task.type, rewardPoints: task.rewardPoints },
@@ -1182,6 +1361,7 @@ export const useAppStore = create<AppState>((set, get) => {
       };
       set({ recoveryTree });
       saveState({ recoveryTree });
+      syncRecoveryTree(recoveryTree).catch(e => console.log('[Supabase] Tree progress sync skipped:', e));
     },
 
     sendEncouragementMessage: (buddyName, message) => {
@@ -1203,6 +1383,13 @@ export const useAppStore = create<AppState>((set, get) => {
         ...get().buddyFeed,
       ].slice(0, 20);
       set({ encouragementMessages, buddyFeed, points: get().points + 5 });
+      
+      pushBuddyFeedEvent(
+        get().user.name || 'Anonymous Buddy',
+        'cheer',
+        `sent encouragement to ${buddyName}: "${message}"`
+      ).catch(e => console.log('[Supabase] Feed event push skipped:', e));
+
       get().recordBehaviorEvent({
         type: 'buddy_encouragement_sent',
         payload: { buddyName, message },
@@ -1232,11 +1419,7 @@ export const useAppStore = create<AppState>((set, get) => {
       
       if (intensity === 'high' && (hour >= 23 || hour < 6)) {
         if (get().restrictedApp !== 'Sleep Lockout') {
-          set({
-            focusLockActive: true,
-            restrictedApp: 'Sleep Lockout',
-            focusLockTimeLeft: 3600 * 7, // Full sleep cycle block
-          });
+          get().triggerFocusLock('Sleep Lockout', 3600 * 7); // Full sleep cycle block
         }
         return;
       } else if (get().restrictedApp === 'Sleep Lockout' && (hour >= 6 && hour < 23)) {
@@ -1244,7 +1427,7 @@ export const useAppStore = create<AppState>((set, get) => {
         get().releaseFocusLock();
       }
 
-      // C. SLIDING WINDOW RATE LIMITER
+      // C. SLIDING WINDOW RATE LIMITER (rolling social media window)
       // High: 30m in last 2h. Medium: 40m in last 2h. Low: 60m in last 2h.
       const thresholdMap = {
         high: 30,
@@ -1259,11 +1442,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
       // If user exceeded the sliding window, activate a supportive recovery shield.
       if (totalMinutes >= threshold && !get().focusLockActive) {
-        set({
-          focusLockActive: true,
-          restrictedApp: 'Digital Overload Pattern',
-          focusLockTimeLeft: 1200, // 20 minute cooldown
-        });
+        get().triggerFocusLock('Digital Overload Pattern', 1200); // 20 minute cooldown
         
         await queueSyncItem('rate_limit_lockout', { limit: threshold, actual: totalMinutes });
         get().recordBehaviorEvent({
@@ -1273,16 +1452,28 @@ export const useAppStore = create<AppState>((set, get) => {
         get().triggerSync();
       }
 
+      // D. BIOMETRIC TRIGGER CHECK (Smartwatch Spikes)
+      try {
+        const biometrics = await getSyncBiometrics();
+        if (biometrics.averageHeartRate > 100 && biometrics.hrv < 35 && !get().focusLockActive) {
+          get().triggerFocusLock('Biometric Stress Alert', 600); // 10 minute cooldown
+          await queueSyncItem('biometric_spike_lockout', { hr: biometrics.averageHeartRate, hrv: biometrics.hrv });
+          get().recordBehaviorEvent({
+            type: 'shield_triggered',
+            payload: { source: 'biometric_spike', hr: biometrics.averageHeartRate, hrv: biometrics.hrv },
+          });
+          get().triggerSync();
+        }
+      } catch (err) {
+        console.log('[Store] checkSystemLocks biometric check skipped:', err);
+      }
+
       if (
         get().observationComplete &&
         currentRisk.burnoutRiskScore >= 76 &&
         !get().focusLockActive
       ) {
-        set({
-          focusLockActive: true,
-          restrictedApp: 'Burnout Risk Rising',
-          focusLockTimeLeft: 15 * 60,
-        });
+        get().triggerFocusLock('Burnout Risk Rising', 15 * 60);
         get().recordBehaviorEvent({
           type: 'shield_triggered',
           payload: { source: 'burnout_risk_engine', riskScore: currentRisk.burnoutRiskScore },
@@ -1299,16 +1490,20 @@ export const useAppStore = create<AppState>((set, get) => {
         try {
           const queue = await getSyncQueue();
           if (queue.length > 0) {
-            // Process queue items and make mock fetch endpoints to sync buddy notifications
-            await fetch('https://jsonplaceholder.typicode.com/posts', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ events: queue }),
+            const synced = await syncUserProfile({
+              id: get().authUserId || get().user.id || get().user.email || 'local-user',
+              name: get().user.name || 'Demb User',
+              recovery_score: get().burnoutRisk.recoveryScore,
+              streak_count: get().streakCount,
+              current_status: get().burnoutRisk.status,
             });
-            
-            // Successfully synced! Remove from local DB
-            await removeSyncItems(queue.map(q => q.id));
-            console.log(`[SYNC] Synced ${queue.length} items to online server successfully`);
+
+            if (synced) {
+              await removeSyncItems(queue.map(q => q.id));
+              console.log(`[SYNC] Synced ${queue.length} queued items`);
+            } else {
+              console.log(`[SYNC] Supabase is not configured. Keeping ${queue.length} items in SQLite queue.`);
+            }
           }
         } catch (err) {
           console.log('[SYNC] Offline or network error. Items remain in SQLite queue.', err);
@@ -1339,18 +1534,15 @@ export const useAppStore = create<AppState>((set, get) => {
           set({
             user: userProfile,
             balance: balance,
-            points: parsed.points ?? 50,
-            streakCount: parsed.streakCount ?? 5,
+            points: parsed.points ?? 0,
+            streakCount: parsed.streakCount ?? 0,
             energyLogs: logs,
             priorities: parsed.priorities ?? null,
             eveningReviews: parsed.eveningReviews ?? [],
             completedMissions: dbMissions.length > 0 ? dbMissions : (parsed.completedMissions ?? []),
-            buddies: parsed.buddies ?? ['Alex', 'Sarah', 'Jessica'],
+            buddies: parsed.buddies ?? [],
             buddyRequests: parsed.buddyRequests ?? [],
-            buddyFeed: parsed.buddyFeed ?? [
-              { id: 'f1', name: 'Alex', event: 'success', detail: 'completed a 10m Nature Walk!', timestamp: '2 mins ago' },
-              { id: 'f2', name: 'Sarah', event: 'lock', detail: 'is stuck on Instagram. Cheer them on!', timestamp: '5 mins ago' }
-            ],
+            buddyFeed: parsed.buddyFeed ?? [],
             socialUsage: parsed.socialUsage ?? initialSocialUsage,
             observationStartedAt: parsed.observationStartedAt ?? null,
             observationComplete: parsed.observationComplete ?? false,
@@ -1366,6 +1558,7 @@ export const useAppStore = create<AppState>((set, get) => {
             encouragementMessages: parsed.encouragementMessages ?? [],
             breakLoopActive: false,
             breakLoopTime: 0,
+            focusLockScreenVisible: false,
             lastKnownTime: Date.now(),
           });
         } else {
@@ -1374,6 +1567,8 @@ export const useAppStore = create<AppState>((set, get) => {
             const balance = recalculateBalance(dbLogs);
             set({
               user: dbUser,
+              authStatus: dbUser.id || dbUser.email ? 'signed_in' : 'signed_out',
+              authUserId: dbUser.id || null,
               energyLogs: dbLogs,
               completedMissions: dbMissions,
               balance: balance,
@@ -1382,30 +1577,43 @@ export const useAppStore = create<AppState>((set, get) => {
             });
           }
         }
-        
+
+        // Initialize Native Blocker settings
+        if (Platform.OS === 'android' && DembBlockerModule) {
+          try {
+            const defaultBlocked = [
+              'com.instagram.android',
+              'com.zhiliaoapp.musically',
+              'com.facebook.katana',
+              'com.snapchat.android',
+              'com.twitter.android'
+            ];
+            DembBlockerModule.setBlockedPackages(defaultBlocked);
+            DembBlockerModule.setLockState(get().focusLockActive, get().restrictedApp);
+          } catch (e) {
+            console.log('[NativeBlocker] Error syncing startup settings:', e);
+          }
+        }
+
         // Initial system check
         get().checkSystemLocks();
       } catch (e) {
         console.error('Failed to load state from database/AsyncStorage', e);
       }
     },
-
     resetAllData: () => {
       set({
         user: initialProfile,
         balance: initialBalance,
-        points: 50,
-        streakCount: 5,
+        points: 0,
+        streakCount: 0,
         energyLogs: [],
         priorities: null,
         eveningReviews: [],
         completedMissions: [],
-        buddies: ['Alex', 'Sarah', 'Jessica'],
+        buddies: [],
         buddyRequests: [],
-        buddyFeed: [
-          { id: 'f1', name: 'Alex', event: 'success', detail: 'completed a 10m Nature Walk!', timestamp: '2 mins ago' },
-          { id: 'f2', name: 'Sarah', event: 'lock', detail: 'is stuck on Instagram. Cheer them on!', timestamp: '5 mins ago' }
-        ],
+        buddyFeed: [],
         stepsWalked: 0,
         screenOffStartTime: null,
         screenOffTargetDuration: 0,
@@ -1413,6 +1621,7 @@ export const useAppStore = create<AppState>((set, get) => {
         breakLoopActive: false,
         breakLoopTime: 0,
         focusLockActive: false,
+        focusLockScreenVisible: false,
         restrictedApp: '',
         focusLockTimeLeft: 0,
         currentActiveMission: null,

@@ -33,7 +33,7 @@ export default function WelcomeScreen() {
   });
 
   const handleNext = () => {
-    router.push('/onboarding');
+    router.push('/auth');
   };
 
   return (
@@ -91,18 +91,6 @@ export default function WelcomeScreen() {
             <Text style={styles.dividerText}>or continue with</Text>
             <View style={styles.dividerLine} />
           </View>
-
-          <Pressable style={styles.googleButton} onPress={handleNext}>
-            <View style={styles.googleIconContainer}>
-              <Ionicons name="logo-google" size={20} color="#4285F4" />
-            </View>
-            <Text style={styles.googleText}>Continue with Google</Text>
-          </Pressable>
-
-          <Pressable style={styles.phoneButton} onPress={handleNext}>
-            <Ionicons name="phone-portrait-outline" size={21} color="#252329" />
-            <Text style={styles.phoneText}>Continue with Phone Number</Text>
-          </Pressable>
 
           <Pressable onPress={handleNext} style={styles.accountLink}>
             <Text style={styles.accountText}>I already have an account</Text>

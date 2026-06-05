@@ -93,7 +93,6 @@ export default function OnboardingScreen() {
     }
 
     setOnboarding({
-      name: 'Demb Cadet',
       profileType: 'other',
       biggestProblem: selectedChallenges.join(', '),
       dailyGoal: goal,

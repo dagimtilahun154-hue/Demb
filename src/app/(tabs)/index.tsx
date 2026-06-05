@@ -25,8 +25,10 @@ export default function DashboardScreen() {
     missions,
     breakLoopActive,
     breakLoopTime,
+    focusLockActive,
     toggleBreakLoop,
     tickBreakLoop,
+    tickFocusLock,
     fetchOnlineBuddyUpdates,
     socialUsage,
     checkSystemLocks,
@@ -59,10 +61,11 @@ export default function DashboardScreen() {
     if (breakLoopActive) {
       interval = setInterval(() => {
         tickBreakLoop();
+        tickFocusLock();
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [breakLoopActive]);
+  }, [breakLoopActive, focusLockActive]);
 
   // Online Buddy system updates
   React.useEffect(() => {
@@ -103,7 +106,7 @@ export default function DashboardScreen() {
   const state = recoveryScore >= 76 ? 'good' : recoveryScore >= 52 ? 'neutral' : 'bad';
   const stateLabel = burnoutRisk.status;
   const stateCopy = recoveryScore >= 76 ? 'Nice rhythm.' : recoveryScore >= 52 ? 'Reset helps.' : 'Recharge now.';
-  const displayName = user.name && user.name !== 'Demb Cadet' ? user.name : 'Dagim';
+  const displayName = user.name || 'You';
   const activeMission = missions[1] ?? missions[0];
   const challengeProgress = 0.62;
   const mainCause = burnoutRisk.causes[0] ?? 'steady recovery rhythm';
@@ -169,7 +172,7 @@ export default function DashboardScreen() {
             onPress={toggleBreakLoop}
           >
             <Text style={[styles.breakLoopText, breakLoopActive && { color: '#FFFFFF' }]}>
-              {breakLoopActive ? 'STOP LOOP' : 'BREAK LOOP'}
+              {breakLoopActive ? 'STOP FOCUS' : 'START FOCUSING'}
             </Text>
             {breakLoopActive && (
               <Text style={[styles.stopwatchText, { color: '#FFFFFF' }]}>{formatStopwatch(breakLoopTime)}</Text>

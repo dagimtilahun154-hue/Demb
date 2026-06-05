@@ -19,7 +19,9 @@ export default function ProfileScreen() {
     streakCount,
     burnoutRisk,
     recoveryPlan,
+    recoverySessions,
     resetAllData,
+    signOut,
     setOnboarding,
   } = useAppStore();
 
@@ -69,10 +71,17 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleSignOut = () => {
+    Alert.alert('Sign out', 'Demb will keep local data cached for offline use after you sign in again.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
+    ]);
+  };
+
   const badges = [
-    { title: 'First Log', desc: 'Arrested first distraction', icon: 'shield-outline', unlocked: true, color: '#ece6f0' },
-    { title: '3-Day Patrol', desc: 'Maintained 3-day streak', icon: 'flame-outline', unlocked: true, color: '#a6f2cf' },
-    { title: 'Mission Cadet', desc: 'Completed first mission', icon: 'checkmark-circle-outline', unlocked: true, color: '#ffdcbd' },
+    { title: 'First Log', desc: 'Record one real recovery signal', icon: 'shield-outline', unlocked: recoverySessions.length > 0 || points > 0, color: '#ece6f0' },
+    { title: '3-Day Patrol', desc: 'Maintain a 3-day streak', icon: 'flame-outline', unlocked: streakCount >= 3, color: '#a6f2cf' },
+    { title: 'Mission Cadet', desc: 'Complete your first mission', icon: 'checkmark-circle-outline', unlocked: recoverySessions.length > 0, color: '#ffdcbd' },
     { title: 'Focus Captain', desc: 'Reach 250 points', unlocked: points >= 250, icon: 'medal-outline', color: '#ffdad6' },
     { title: 'Sheriff Badge', desc: 'Reach 500 points', unlocked: points >= 500, icon: 'trophy-outline', color: '#e8ddff' },
     { title: 'Balance Master', desc: 'Maintained 80+ Score', unlocked: false, icon: 'infinite-outline', color: '#cac4d4' },
@@ -117,7 +126,7 @@ export default function ProfileScreen() {
           />
           <View style={styles.profileInfoContainer}>
             <Text style={[styles.userName, { color: colors.textPrimary }]} numberOfLines={1}>
-              {user.name || 'Demb Cadet'}
+              {user.name || 'Your profile'}
             </Text>
             <View style={[styles.rankBadge, { backgroundColor: colors.primaryContainer }]}>
               <Text style={[styles.rankText, { color: colors.primary }]}>{getRank()}</Text>
@@ -249,6 +258,21 @@ export default function ProfileScreen() {
           ))}
 
           {/* Reset Action */}
+          <Pressable 
+            onPress={handleSignOut} 
+            style={({ pressed }) => [
+              styles.settingsRow,
+              { borderTopWidth: 1, borderTopColor: colors.outlineVariant + '30', marginTop: Spacing.one },
+              pressed && styles.rowPressed
+            ]}
+          >
+            <View style={styles.settingsRowLeft}>
+              <Ionicons name="log-out-outline" size={18} color={colors.textSecondary} />
+              <Text style={[styles.settingsRowText, { color: colors.textPrimary }]}>Sign Out</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </Pressable>
+
           <Pressable 
             onPress={handleReset} 
             style={({ pressed }) => [

@@ -23,7 +23,12 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.PACKAGE_USAGE_STATS",
-        "android.permission.FOREGROUND_SERVICE"
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_HEART_RATE_VARIABILITY",
+        "android.permission.health.READ_SLEEP"
       ]
     },
     "web": {
@@ -48,7 +53,8 @@
           "locationAlwaysAndWhenInUsePermission": "Demb needs your location to track walking missions."
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "./plugins/withDembNativeBlocker"
     ],
     "experiments": {
       "typedRoutes": true

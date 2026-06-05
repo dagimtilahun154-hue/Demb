@@ -80,7 +80,7 @@ function buildRecommendedActions(causes: BurnoutCause[], status: BurnoutStatus) 
   const actions: string[] = [];
 
   if (causes.includes('excessive social media') || causes.includes('dopamine seeking pattern')) {
-    actions.push('Start a short Break Loop reset before opening high-dopamine apps again.');
+    actions.push('Start a short focus reset before opening high-dopamine apps again.');
   }
   if (causes.includes('low movement')) {
     actions.push('Complete a gentle walking task to bring movement back into the day.');

@@ -1,341 +1,140 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, Pressable, Animated, Alert, Modal, useColorScheme, ScrollView, BackHandler } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+import { Alert, BackHandler, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppStore } from '@/store';
+
+const appNameByPackage: Record<string, string> = {
+  'com.instagram.android': 'Instagram',
+  'com.zhiliaoapp.musically': 'TikTok',
+  'com.facebook.katana': 'Facebook',
+  'com.snapchat.android': 'Snapchat',
+  'com.twitter.android': 'X',
+};
 
 export default function FocusLockScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const scheme = useColorScheme() ?? 'light';
-  const colors = Colors[scheme];
+  const params = useLocalSearchParams<{ blockedApp?: string; restrictedAppName?: string }>();
 
   const {
     restrictedApp,
-    balance,
+    focusLockTimeLeft,
     missions,
-    socialUsage,
-    buddies,
-    points,
     burnoutRisk,
+    isTimeTampered,
     releaseFocusLock,
     startMission,
-    isTimeTampered,
-    user
+    tickFocusLock,
   } = useAppStore();
 
-  // Hardware Back Button Bypass Prevention
+  const [showIntention, setShowIntention] = useState(false);
+  const [intentionStep, setIntentionStep] = useState(0);
+
+  const blockedPackage = Array.isArray(params.blockedApp) ? params.blockedApp[0] : params.blockedApp;
+  const routeLabel = Array.isArray(params.restrictedAppName) ? params.restrictedAppName[0] : params.restrictedAppName;
+  const blockedAppName = blockedPackage
+    ? appNameByPackage[blockedPackage] ?? blockedPackage
+    : routeLabel ?? (restrictedApp || 'that app');
+  const causeText = burnoutRisk.causes.length > 0 ? burnoutRisk.causes.slice(0, 2).join(' + ') : 'digital overload';
+
   useEffect(() => {
-    const onBackPress = () => {
-      // Returning true blocks the default back action
-      return true;
-    };
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => subscription.remove();
   }, []);
 
-  const [showQuiz, setShowQuiz] = useState(false);
-  const [showBreathe, setShowBreathe] = useState(false);
-  const [breatheSeconds, setBreatheSeconds] = useState(600); // 10 minutes breathing
-  const [quizScore, setQuizScore] = useState(0);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-
-  const isNightTime = () => {
-    const hours = new Date().getHours();
-    return hours >= 20 || hours < 6;
-  };
-
-  // Get social time for the active app
-  const currentAppTime = restrictedApp === 'Instagram' ? '2h 14m' : '1h 40m';
-  const mainCauseText = burnoutRisk.causes.length > 0
-    ? burnoutRisk.causes.slice(0, 2).join(' + ')
-    : 'digital overload + low recovery';
-
-  // Handle critical notifications to buddies
   useEffect(() => {
-    if (balance.balanceScore < -50 || balance.recoveryDebt > 50) {
-      // Critical usage! Send warning alert about notifying buddy
-      Alert.alert(
-        "Recovery Support Sent",
-        `Your burnout risk indicators are rising. We sent Abel a supportive nudge: "Dagim may need a reset. Send encouragement or invite them to a short recovery task."`,
-        [{ text: "Acknowledge" }]
-      );
-      
-      // Post directly to online buddy feed
-      const store = useAppStore.getState();
-      const urgentItem = {
-        id: `urgent_${Date.now()}`,
-        name: 'Alert',
-        event: 'lock' as const,
-        detail: `Dagim may need support. Abel is invited to send encouragement or start a shared recovery session.`,
-        timestamp: 'Just now'
-      };
-      useAppStore.setState({ buddyFeed: [urgentItem, ...store.buddyFeed] });
-    }
-  }, []);
-
-  const handleStartRecovery = () => {
-    if (isNightTime()) {
-      // Night time breathing gap
-      setShowBreathe(true);
-    } else {
-      // Daytime walking mission
-      const walkMission = missions.find(m => m.id === 'm2') || missions[0];
-      router.push({ pathname: '/mission', params: { missionId: walkMission.id } });
-    }
-  };
-
-  const handleContinuePrevious = () => {
-    // Awareness quiz to make them mindful of scrolling
-    setShowQuiz(true);
-    setCurrentQuestion(0);
-    setQuizScore(0);
-  };
-
-  // 10 minutes breathing exercise runner
-  useEffect(() => {
-    let interval: any = null;
-    if (showBreathe && breatheSeconds > 0) {
-      interval = setInterval(() => {
-        setBreatheSeconds(prev => prev - 1);
-      }, 1000);
-    } else if (breatheSeconds === 0) {
-      setShowBreathe(false);
-      Alert.alert("Recovery Complete", "Nice job! Focus restored.");
-      releaseFocusLock();
-    }
+    const interval = setInterval(() => {
+      tickFocusLock();
+    }, 1000);
     return () => clearInterval(interval);
-  }, [showBreathe, breatheSeconds]);
+  }, [tickFocusLock]);
 
-  const quizQuestions = [
-    {
-      q: "What is your main goal for today?",
-      options: ["Finish project tasks", "Take more breaks", "Exercise/Walk", "Get enough sleep"]
-    },
-    {
-      q: "How does your body feel right now?",
-      options: ["Tense/Tired", "Energetic", "Relaxed", "Anxious"]
-    },
-    {
-      q: "Why did you open this app just now?",
-      options: ["Habit/Boredom", "Need to check something", "Escape work pressure", "Avoid sleep"]
-    }
-  ];
-
-  const handleQuizAnswer = () => {
-    if (currentQuestion < quizQuestions.length - 1) {
-      setCurrentQuestion(prev => prev + 1);
-    } else {
-      setShowQuiz(false);
-      Alert.alert(
-        "Mindfulness Quiz Completed",
-        "You've restored screen awareness. Use your screen time mindfully now!",
-        [
-          {
-            text: "Unlock App",
-            onPress: () => releaseFocusLock()
-          }
-        ]
-      );
-    }
+  const formatTime = (seconds: number) => {
+    const safeSeconds = Math.max(0, seconds);
+    const mins = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatBreatheTime = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${mins}:${s.toString().padStart(2, '0')}`;
+  const handleTask = () => {
+    const walkMission = missions.find((mission) => mission.id === 'm2') || missions[0];
+    if (!walkMission) {
+      Alert.alert('No task ready', 'Demb could not find a recovery task yet.');
+      return;
+    }
+    router.push({ pathname: '/mission', params: { missionId: walkMission.id } });
   };
 
-  // 1. Render Clock Tampering Lockout View
+  const handleIntentionAnswer = () => {
+    if (intentionStep < intentionPrompts.length - 1) {
+      setIntentionStep((step) => step + 1);
+      return;
+    }
+
+    setShowIntention(false);
+    setIntentionStep(0);
+  };
+
   if (isTimeTampered) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        <View style={styles.topGradientGlow} />
-        <Ionicons name="warning" size={80} color="#EF4444" style={{ marginBottom: 24 }} />
-        <Text style={[styles.shieldTitle, { textAlign: 'center', color: '#EF4444' }]}>Recovery Shield Needs Clock Sync</Text>
-        <Text style={[styles.shieldDescription, { textAlign: 'center', marginBottom: 20 }]}>
-          Demb noticed a clock change and paused wellness rules until time can be verified.
-        </Text>
-        <Text style={[styles.shieldSubDescription, { textAlign: 'center', color: '#EF4444', fontWeight: 'bold' }]}>
-          Your buddy can support you while Demb restores a stable rhythm.
-        </Text>
-        <Pressable 
-          style={[styles.primaryBtn, { backgroundColor: '#EF4444', marginTop: 32 }]} 
-          onPress={() => {
-            Alert.alert("Clock Sync Required", "Align your system clock with real network time to verify and restore access.");
-          }}
-        >
-          <Text style={styles.primaryBtnText}>Verify Clock Sync</Text>
-        </Pressable>
+      <View style={[styles.container, styles.centered, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+        <Ionicons name="warning" size={70} color="#EF4444" />
+        <Text style={styles.title}>Clock sync needed</Text>
+        <Text style={styles.copy}>Demb paused restrictions until your phone time is stable again.</Text>
       </View>
     );
   }
 
-  // 2. Render Midnight Sleep Lockout View
   if (restrictedApp === 'Sleep Lockout') {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
-        <View style={styles.topGradientGlow} />
-        <View style={styles.bottomGradientGlow} />
-        
-        <View style={[styles.plantContainer, { backgroundColor: 'rgba(108, 99, 255, 0.08)', borderColor: 'rgba(108, 99, 255, 0.2)', width: 140, height: 140, borderRadius: 70, marginBottom: 28 }]}>
-          <Ionicons name="moon" size={72} color="#6C63FF" />
-        </View>
-
-        <Text style={[styles.shieldTitle, { fontSize: 26, marginBottom: 16 }]}>Midnight Recovery Lock</Text>
-        <Text style={[styles.shieldDescription, { fontSize: 16, lineHeight: 24, marginBottom: 24 }]}>
-          It is near midnight. Your recovery plan restricts all social media and notifications between 11:00 PM and 6:00 AM to secure your rest.
-        </Text>
-        
-        <View style={[styles.timeBadge, { backgroundColor: 'rgba(108, 99, 255, 0.15)', borderColor: 'rgba(108, 99, 255, 0.25)' }]}>
-          <Ionicons name="lock-closed-outline" size={16} color="#FFE4E1" style={{ marginRight: 6 }} />
-          <Text style={styles.timeBadgeText}>Locked Until 6:00 AM</Text>
-        </View>
-
-        <Text style={[styles.shieldSubDescription, { marginTop: 24, fontStyle: 'italic' }]}>
-          "Rest is the foundation of digital balance. Let's recharge."
-        </Text>
+      <View style={[styles.container, styles.centered, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+        <View style={styles.glowTop} />
+        <Ionicons name="moon" size={70} color="#A7F36B" />
+        <Text style={styles.title}>Sleep lock</Text>
+        <Text style={styles.timer}>{formatTime(focusLockTimeLeft)}</Text>
+        <Text style={styles.copy}>Social apps reopen after your recovery window.</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Background Glows */}
-      <View style={styles.topGradientGlow} />
-      <View style={styles.bottomGradientGlow} />
+    <View style={[styles.container, { paddingTop: insets.top + 34, paddingBottom: insets.bottom + 34 }]}>
+      <View style={styles.glowTop} />
+      <View style={styles.glowBottom} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Plant Circle Illustration */}
-        <View style={styles.puckWrapper}>
-          <View style={styles.outerOrbit}>
-            <View style={styles.orbitDot1} />
-            <View style={styles.orbitDot2} />
-            <View style={styles.plantContainer}>
-              <Ionicons name="leaf" size={62} color="#78CA2A" />
-            </View>
-          </View>
-        </View>
+      <View style={styles.lockGlyph}>
+        <Ionicons name="lock-closed" size={42} color="#FFFFFF" />
+      </View>
 
-        {/* Title Block */}
-        <Text style={styles.shieldTitle}>Recovery Shield Active</Text>
-        <Text style={styles.shieldDescription}>
-          Your burnout risk is rising.
-        </Text>
-        <Text style={styles.shieldSubDescription}>
-          Main cause: {mainCauseText}.
-        </Text>
+      <Text style={styles.eyebrow}>Recovery shield</Text>
+      <Text style={styles.title}>{blockedAppName} is paused</Text>
 
-        {/* Time Limit Badge */}
-        <View style={styles.timeBadge}>
-          <Ionicons name="time-outline" size={16} color="#FFE4E1" style={{ marginRight: 6 }} />
-          <Text style={styles.timeBadgeText}>{currentAppTime} On {restrictedApp || 'Digital Overload'} Today</Text>
-        </View>
+      <Text style={styles.timer}>{formatTime(focusLockTimeLeft)}</Text>
+      <Text style={styles.copy}>until this app can open again</Text>
 
-        {/* Buddy Streak Banner */}
-        <View style={styles.buddyStreakRow}>
-          <View style={styles.buddyIcon}>
-            <Text style={styles.buddyIconText}>A</Text>
-          </View>
-          <Text style={styles.buddyStreakText}>
-            👥 Abel is protecting today's streak with you.{"\n"}
-            <Text style={styles.boldText}>Shared Streak: 12 Days</Text>
-          </Text>
-        </View>
+      <Pressable style={styles.taskButton} onPress={handleTask}>
+        <Ionicons name="leaf-outline" size={20} color="#1F1E24" />
+        <Text style={styles.taskButtonText}>Do a task</Text>
+      </Pressable>
 
-        {/* Recovery Challenge Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.challengeIconBg}>
-              <Ionicons name="leaf-outline" size={18} color="#6C63FF" />
-            </View>
-            <Text style={styles.cardHeaderTitle}>Recovery Challenge</Text>
-          </View>
-          <Text style={styles.cardBodyText}>
-            Complete a reset task to return to a steadier state.
-          </Text>
-          
-          <View style={styles.iconSelectionRow}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="walk" size={20} color="#6C63FF" />
-            </View>
-            <View style={styles.iconCircle}>
-              <Ionicons name="body" size={20} color="#6C63FF" />
-            </View>
-            <View style={styles.iconCircle}>
-              <Ionicons name="water-outline" size={20} color="#6C63FF" />
-            </View>
-          </View>
+      <Pressable style={styles.intentionButton} onPress={() => setShowIntention(true)}>
+        <Text style={styles.intentionText}>Set intention</Text>
+      </Pressable>
 
-          <Pressable style={styles.primaryBtn} onPress={handleStartRecovery}>
-            <Text style={styles.primaryBtnText}>Start Recovery Challenge</Text>
-          </Pressable>
-        </View>
+      <Text style={styles.footnote}>{causeText}</Text>
 
-        {/* Return to What Matters Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.restoreIconBg}>
-              <Ionicons name="time-outline" size={18} color="#6C63FF" />
-            </View>
-            <Text style={styles.cardHeaderTitle}>Return To What Matters</Text>
-          </View>
-          <Text style={styles.cardBodyText}>
-            Return to one meaningful offline action.
-          </Text>
-
-          <View style={styles.iconSelectionRow}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="book-outline" size={20} color="#6C63FF" />
-            </View>
-            <View style={styles.iconCircle}>
-              <Ionicons name="desktop-outline" size={20} color="#6C63FF" />
-            </View>
-            <View style={styles.iconCircle}>
-              <Ionicons name="bookmark-outline" size={20} color="#6C63FF" />
-            </View>
-          </View>
-
-          <Pressable style={styles.secondaryBtn} onPress={handleContinuePrevious}>
-            <Text style={styles.secondaryBtnText}>Return To What Matters</Text>
-          </Pressable>
-        </View>
-
-        {/* Footer */}
-        <Text style={styles.footerNote}>
-          Demb helps you protect your energy without shame.
-        </Text>
-      </ScrollView>
-
-      {/* Breathing Task Overlay Modal */}
-      <Modal visible={showBreathe} animationType="slide" transparent>
-        <View style={styles.modalBg}>
-          <View style={styles.modalBody}>
-            <Ionicons name="hourglass-outline" size={64} color="#6C63FF" />
-            <Text style={styles.modalTitle}>Breathing Exercise</Text>
-            <Text style={styles.modalSubtitle}>Relax. Inhale and exhale deeply...</Text>
-            <Text style={styles.breatheTimer}>{formatBreatheTime(breatheSeconds)}</Text>
-            <Pressable style={styles.skipBtn} onPress={() => { setShowBreathe(false); releaseFocusLock(); }}>
-              <Text style={styles.skipBtnText}>Skip Recovery</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Mindful Quiz Overlay Modal */}
-      <Modal visible={showQuiz} animationType="slide" transparent>
-        <View style={styles.modalBg}>
-          <View style={styles.modalBody}>
-            <Ionicons name="bulb-outline" size={48} color="#6C63FF" style={{ marginBottom: 12 }} />
-            <Text style={styles.modalTitle}>Mindfulness Check</Text>
-            <Text style={styles.quizQ}>{quizQuestions[currentQuestion].q}</Text>
-            
-            <View style={styles.quizOptions}>
-              {quizQuestions[currentQuestion].options.map((opt, i) => (
-                <Pressable key={i} style={styles.quizOptionBtn} onPress={handleQuizAnswer}>
-                  <Text style={styles.quizOptionText}>{opt}</Text>
+      <Modal visible={showIntention} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Ionicons name="bulb-outline" size={42} color="#6C63FF" />
+            <Text style={styles.modalTitle}>Intention</Text>
+            <Text style={styles.modalQuestion}>{intentionPrompts[intentionStep].question}</Text>
+            <View style={styles.optionList}>
+              {intentionPrompts[intentionStep].options.map((option) => (
+                <Pressable key={option} style={styles.optionButton} onPress={handleIntentionAnswer}>
+                  <Text style={styles.optionText}>{option}</Text>
                 </Pressable>
               ))}
             </View>
@@ -346,314 +145,173 @@ export default function FocusLockScreen() {
   );
 }
 
+const intentionPrompts = [
+  {
+    question: 'Why did you open it?',
+    options: ['Habit', 'Message', 'Boredom'],
+  },
+  {
+    question: 'What matters next?',
+    options: ['Finish work', 'Walk', 'Rest'],
+  },
+  {
+    question: 'Choose your next move.',
+    options: ['Wait it out', 'Do a task', 'Close phone'],
+  },
+];
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A080D', // dark premium styling matching the design mockup image
-  },
-  topGradientGlow: {
-    position: 'absolute',
-    top: -150,
-    width: '100%',
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: 'rgba(108, 99, 255, 0.15)',
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 100,
-  },
-  bottomGradientGlow: {
-    position: 'absolute',
-    bottom: -150,
-    width: '100%',
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 50,
-    paddingBottom: 60,
+    paddingHorizontal: 26,
     alignItems: 'center',
-  },
-  puckWrapper: {
-    height: 200,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
+    backgroundColor: 'rgba(10, 8, 13, 0.82)',
   },
-  outerOrbit: {
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    borderWidth: 1.5,
-    borderColor: '#7a768f',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
+  centered: {
+    gap: 18,
   },
-  orbitDot1: {
+  glowTop: {
     position: 'absolute',
-    top: 15,
-    left: 30,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#a5a2b0',
+    top: -140,
+    width: 340,
+    height: 340,
+    borderRadius: 170,
+    backgroundColor: 'rgba(120, 202, 42, 0.18)',
   },
-  orbitDot2: {
+  glowBottom: {
     position: 'absolute',
-    bottom: 30,
-    right: 25,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#a5a2b0',
+    bottom: -170,
+    width: 420,
+    height: 420,
+    borderRadius: 210,
+    backgroundColor: 'rgba(108, 99, 255, 0.18)',
   },
-  plantContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(120, 202, 42, 0.08)',
-    justifyContent: 'center',
+  lockGlyph: {
+    width: 98,
+    height: 98,
+    borderRadius: 49,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(120, 202, 42, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    marginBottom: 28,
   },
-  shieldTitle: {
-    color: '#FFF',
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 12,
+  eyebrow: {
+    color: '#A7F36B',
+    fontSize: 13,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginBottom: 10,
   },
-  shieldDescription: {
+  title: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  timer: {
+    color: '#FFFFFF',
+    fontSize: 78,
+    lineHeight: 86,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  copy: {
     color: '#E6E5EA',
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    marginTop: 8,
+    marginBottom: 32,
   },
-  shieldSubDescription: {
-    color: '#8A869C',
-    fontSize: 13,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  timeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    marginBottom: 18,
-  },
-  timeBadgeText: {
-    color: '#E6E5EA',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  buddyStreakRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 25,
+  taskButton: {
+    height: 56,
     width: '100%',
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  buddyIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFE4C4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  buddyIconText: {
-    color: '#2E221E',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  buddyStreakText: {
-    color: '#D1CFDB',
-    fontSize: 12,
-    lineHeight: 16,
-    flex: 1,
-  },
-  boldText: {
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  card: {
-    backgroundColor: '#F5F4F7', // soft grey/white container matching mockup design
+    maxWidth: 330,
     borderRadius: 28,
-    width: '100%',
-    padding: 24,
-    marginBottom: 20,
+    backgroundColor: '#A7F36B',
     alignItems: 'center',
-  },
-  cardHeaderRow: {
+    justifyContent: 'center',
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    gap: 8,
+    marginBottom: 14,
   },
-  challengeIconBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#E6E2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  restoreIconBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#E6E2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  cardHeaderTitle: {
+  taskButtonText: {
     color: '#1F1E24',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '900',
   },
-  cardBodyText: {
-    color: '#555263',
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  iconSelectionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFF',
+  intentionButton: {
+    height: 52,
+    width: '100%',
+    maxWidth: 330,
+    borderRadius: 26,
     borderWidth: 1,
-    borderColor: '#ECEAEF',
-    justifyContent: 'center',
+    borderColor: 'rgba(255, 255, 255, 0.28)',
     alignItems: 'center',
-  },
-  primaryBtn: {
-    height: 52,
-    width: '100%',
-    backgroundColor: '#605873', // deep purple CTA style
-    borderRadius: 26,
     justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
-  primaryBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
+  intentionText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  secondaryBtn: {
-    height: 52,
-    width: '100%',
-    backgroundColor: '#ECEAEF',
-    borderRadius: 26,
-    borderWidth: 1.5,
-    borderColor: '#D0CDD5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryBtnText: {
-    color: '#403B4C',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  footerNote: {
-    color: '#767385',
-    fontSize: 12,
+  footnote: {
+    color: '#BDB9CA',
+    fontSize: 13,
     textAlign: 'center',
-    marginTop: 18,
+    marginTop: 22,
   },
-  modalBg: {
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(10,8,13,0.95)',
+    backgroundColor: 'rgba(10, 8, 13, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
-  modalBody: {
-    backgroundColor: '#FFF',
-    borderRadius: 28,
-    padding: 30,
+  modalCard: {
     width: '100%',
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    padding: 26,
     alignItems: 'center',
   },
   modalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
     color: '#1F1E24',
-    marginTop: 12,
-    marginBottom: 6,
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: 10,
+    marginBottom: 12,
   },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#6F6C7D',
+  modalQuestion: {
+    color: '#403B4C',
+    fontSize: 18,
+    fontWeight: '800',
     textAlign: 'center',
     marginBottom: 20,
   },
-  breatheTimer: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#6C63FF',
-    marginBottom: 30,
-  },
-  skipBtn: {
-    height: 48,
-    paddingHorizontal: 24,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#C0BDC8',
-    justifyContent: 'center',
-  },
-  skipBtnText: {
-    color: '#6C63FF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  quizQ: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F1E24',
-    textAlign: 'center',
-    marginVertical: 18,
-  },
-  quizOptions: {
+  optionList: {
     width: '100%',
     gap: 10,
   },
-  quizOptionBtn: {
-    height: 48,
-    borderRadius: 24,
+  optionButton: {
+    minHeight: 50,
+    borderRadius: 25,
     backgroundColor: '#F5F4F7',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: '#E6E5EA',
+    borderColor: '#E2DFE8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
   },
-  quizOptionText: {
+  optionText: {
     color: '#403B4C',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '800',
   },
 });
