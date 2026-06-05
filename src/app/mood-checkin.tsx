@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAppStore } from '@/store';
+import AnimatedPressable from '@/components/AnimatedPressable';
 
 const scores = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -36,10 +37,8 @@ export default function MoodCheckInScreen() {
         </View>
 
         <View style={styles.heroCard}>
-          <Text style={styles.title}>How are you feeling now?</Text>
-          <Text style={styles.subtitle}>
-            A quick check-in helps Demb understand your wellness pattern with more care.
-          </Text>
+          <Text style={styles.title}>How are you?</Text>
+          <Text style={styles.subtitle}>Quick check-in.</Text>
         </View>
 
         <ScorePicker label="Mood level" value={moodScore} onChange={setMoodScore} />
@@ -50,18 +49,20 @@ export default function MoodCheckInScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Feeling overwhelmed?</Text>
           <View style={styles.binaryRow}>
-            <Pressable
+            <AnimatedPressable
+              lifted={!overwhelmed}
               onPress={() => setOverwhelmed(false)}
               style={[styles.choiceButton, !overwhelmed && styles.choiceSelected]}
             >
               <Text style={[styles.choiceText, !overwhelmed && styles.choiceTextSelected]}>Not right now</Text>
-            </Pressable>
-            <Pressable
+            </AnimatedPressable>
+            <AnimatedPressable
+              lifted={overwhelmed}
               onPress={() => setOverwhelmed(true)}
               style={[styles.choiceButton, overwhelmed && styles.choiceSelected]}
             >
               <Text style={[styles.choiceText, overwhelmed && styles.choiceTextSelected]}>A little</Text>
-            </Pressable>
+            </AnimatedPressable>
           </View>
           <TextInput
             value={note}
@@ -72,9 +73,9 @@ export default function MoodCheckInScreen() {
           />
         </View>
 
-        <Pressable style={styles.primaryButton} onPress={submit}>
-          <Text style={styles.primaryText}>Save Check-In</Text>
-        </Pressable>
+        <AnimatedPressable lifted style={styles.primaryButton} onPress={submit}>
+          <Text style={styles.primaryText}>Save</Text>
+        </AnimatedPressable>
       </ScrollView>
     </View>
   );
@@ -98,13 +99,13 @@ function ScorePicker({
         {scores.map(score => {
           const selected = value === score;
           return (
-            <Pressable key={score} onPress={() => onChange(score)} style={[styles.scoreChip, selected && styles.scoreSelected]}>
+            <AnimatedPressable key={score} lifted={selected} onPress={() => onChange(score)} style={[styles.scoreChip, selected && styles.scoreSelected]}>
               <Text style={[styles.scoreText, selected && styles.scoreTextSelected]}>{score}</Text>
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </View>
-      <Text style={styles.helperText}>{reverse ? 'Higher means more pressure.' : 'Higher means more steady.'}</Text>
+      <Text style={styles.helperText}>{reverse ? 'More pressure' : 'More steady'}</Text>
     </View>
   );
 }

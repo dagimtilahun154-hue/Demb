@@ -5,6 +5,7 @@ import { Colors, Spacing, Radius, Shadows, BottomTabInset } from '@/constants/th
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '@/store';
 import NeomorphicCard from '@/components/NeomorphicCard';
+import AnimatedPressable from '@/components/AnimatedPressable';
 
 export default function ActivityLogScreen() {
   const scheme = useColorScheme() ?? 'light';
@@ -121,8 +122,8 @@ export default function ActivityLogScreen() {
       </View>
 
       <View style={[styles.contentContainer, { paddingTop: insets.top + Spacing.two }]}>
-        {/* Title */}
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Balance Log</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Manual Log</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>For missed signals.</Text>
 
         {/* Priorities Header Card */}
         <NeomorphicCard 
@@ -135,11 +136,11 @@ export default function ActivityLogScreen() {
           style={styles.priorityCard}
         >
           <View style={styles.priorityCardHeader}>
-            <Text style={[styles.priorityCardLabel, { color: colors.primary }]}>DAILY PRIORITIES</Text>
+            <Text style={[styles.priorityCardLabel, { color: colors.primary }]}>PRIORITIES</Text>
             <Ionicons name="create-outline" size={16} color={colors.primary} />
           </View>
           <Text style={[styles.priorityCardTitle, { color: colors.textPrimary }]}>
-            {priorities ? 'Tap to edit daily goals' : 'Configure your 3 priorities for today'}
+            {priorities ? 'Tap to edit' : 'Set today'}
           </Text>
         </NeomorphicCard>
 
@@ -153,7 +154,7 @@ export default function ActivityLogScreen() {
             ]}
           >
             <Text style={[styles.tabText, { color: activeTab === 'spent' ? colors.onPrimary : colors.textSecondary }]}>
-              Energy Spent
+              Spent
             </Text>
           </Pressable>
 
@@ -165,7 +166,7 @@ export default function ActivityLogScreen() {
             ]}
           >
             <Text style={[styles.tabText, { color: activeTab === 'recovered' ? colors.onPrimary : colors.textSecondary }]}>
-              Energy Restored
+              Restored
             </Text>
           </Pressable>
         </View>
@@ -179,7 +180,7 @@ export default function ActivityLogScreen() {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="receipt-outline" size={44} color={colors.textMuted} />
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No logs in this category today.</Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No entries.</Text>
             </View>
           }
           renderItem={({ item }) => (
@@ -217,19 +218,19 @@ export default function ActivityLogScreen() {
         />
 
         {/* Floating Action Button */}
-        <Pressable
+        <AnimatedPressable
+          lifted
           onPress={() => {
             setCategory(activeTab === 'spent' ? 'Social Media' : 'Sleep');
             setModalVisible(true);
           }}
-          style={({ pressed }) => [
+          style={[
             styles.fab,
             { backgroundColor: colors.primary },
-            pressed && styles.pressed,
           ]}
         >
           <Ionicons name="add" size={28} color="#fff" />
-        </Pressable>
+        </AnimatedPressable>
 
         {/* Activity Logging Modal */}
         <Modal visible={modalVisible} animationType="slide" transparent>
@@ -239,7 +240,7 @@ export default function ActivityLogScreen() {
                 
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                    Log {activeTab === 'spent' ? 'Distraction' : 'Recovery'}
+                    Add {activeTab === 'spent' ? 'Spent' : 'Restored'}
                   </Text>
                   <Pressable onPress={() => setModalVisible(false)} style={styles.closeButton}>
                     <Ionicons name="close" size={24} color={colors.textPrimary} />
@@ -251,7 +252,7 @@ export default function ActivityLogScreen() {
                   <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Title</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    placeholder="e.g. Browsing Instagram, Meditation Break"
+                    placeholder="e.g. Instagram or walk"
                     placeholderTextColor={colors.textMuted}
                     value={title}
                     onChangeText={setTitle}
@@ -328,7 +329,7 @@ export default function ActivityLogScreen() {
                   <TextInput
                     style={[styles.modalInput, { height: 80, paddingVertical: 12, backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
                     multiline
-                    placeholder="Add details..."
+                    placeholder="Optional"
                     placeholderTextColor={colors.textMuted}
                     value={notes}
                     onChangeText={setNotes}
@@ -340,7 +341,7 @@ export default function ActivityLogScreen() {
                   style={styles.submitButton}
                   bgColor={colors.primary}
                 >
-                  <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>Log Activity</Text>
+                  <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>Save Entry</Text>
                 </NeomorphicCard>
 
               </ScrollView>
@@ -355,7 +356,7 @@ export default function ActivityLogScreen() {
               <ScrollView showsVerticalScrollIndicator={false}>
                 
                 <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Edit Daily Priorities</Text>
+                  <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Priorities</Text>
                   <Pressable onPress={() => setPriorityModalVisible(false)} style={styles.closeButton}>
                     <Ionicons name="close" size={24} color={colors.textPrimary} />
                   </Pressable>
@@ -363,10 +364,10 @@ export default function ActivityLogScreen() {
 
                 {/* Main Task */}
                 <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Main Work/Study Goal</Text>
+                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Main</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    placeholder="e.g. Build the React Native app layout"
+                    placeholder="Main task"
                     placeholderTextColor={colors.textMuted}
                     value={mainTask}
                     onChangeText={setMainTask}
@@ -375,10 +376,10 @@ export default function ActivityLogScreen() {
 
                 {/* Health Goal */}
                 <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Health / Physical Goal</Text>
+                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Health</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    placeholder="e.g. Complete 10,000 steps"
+                    placeholder="Health goal"
                     placeholderTextColor={colors.textMuted}
                     value={healthGoal}
                     onChangeText={setHealthGoal}
@@ -387,10 +388,10 @@ export default function ActivityLogScreen() {
 
                 {/* Recovery Goal */}
                 <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Mental Recovery / Screen Off Goal</Text>
+                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Recovery</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    placeholder="e.g. No social media after 9 PM"
+                    placeholder="Recovery goal"
                     placeholderTextColor={colors.textMuted}
                     value={recoveryGoal}
                     onChangeText={setRecoveryGoal}
@@ -433,6 +434,11 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.8,
+  },
+  subtitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 2,
     marginBottom: Spacing.two,
   },
   priorityCard: {

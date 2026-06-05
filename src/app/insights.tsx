@@ -26,8 +26,8 @@ export default function RecoveryInsightsScreen() {
         </View>
 
         <View style={styles.heroCard}>
-          <Text style={styles.title}>Today&apos;s wellness pattern</Text>
-          <Text style={styles.subtitle}>{burnoutRisk.explanation}</Text>
+          <Text style={styles.title}>Pattern</Text>
+          <Text style={styles.subtitle} numberOfLines={2}>{burnoutRisk.explanation}</Text>
           <View style={styles.scoreRow}>
             <Score value={`${burnoutRisk.burnoutRiskScore}%`} label="Burnout risk" />
             <Score value={`${burnoutRisk.recoveryScore}%`} label="Recovery" />
@@ -42,11 +42,11 @@ export default function RecoveryInsightsScreen() {
         <Signal icon="pulse-outline" label="Stress check-in" value={`${mood?.stressScore ?? 7}/10`} />
         <Signal icon="leaf-outline" label="Recovery sessions" value={`${recoverySessions.length} completed`} />
 
-        <Text style={styles.sectionTitle}>Recommended actions</Text>
-        {burnoutRisk.recommendedActions.map(action => (
+        <Text style={styles.sectionTitle}>Actions</Text>
+        {burnoutRisk.recommendedActions.slice(0, 3).map(action => (
           <View key={action} style={styles.actionCard}>
             <Ionicons name="checkmark-circle-outline" size={18} color={Colors.light.secondary} />
-            <Text style={styles.actionText}>{action}</Text>
+            <Text style={styles.actionText} numberOfLines={2}>{action}</Text>
           </View>
         ))}
       </ScrollView>

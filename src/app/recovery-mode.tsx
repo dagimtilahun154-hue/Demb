@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAppStore } from '@/store';
+import AnimatedPressable from '@/components/AnimatedPressable';
 
 export default function RecoveryModeScreen() {
   const router = useRouter();
@@ -40,16 +41,14 @@ export default function RecoveryModeScreen() {
             <Ionicons name="leaf-outline" size={38} color={Colors.light.primary} />
           </View>
           <Text style={styles.title}>Recovery Mode Active</Text>
-          <Text style={styles.subtitle}>
-            Demb noticed rising burnout risk indicators. This is wellness support, not a diagnosis.
-          </Text>
+          <Text style={styles.subtitle}>A short reset can steady your score.</Text>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
           </View>
           <Text style={styles.progressText}>{burnoutRisk.recoveryScore}% toward a stable state</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Detected causes</Text>
+        <Text style={styles.sectionTitle}>Causes</Text>
         <View style={styles.chipRow}>
           {burnoutRisk.causes.slice(0, 4).map(cause => (
             <View key={cause} style={styles.chip}>
@@ -58,8 +57,8 @@ export default function RecoveryModeScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Three-step recovery plan</Text>
-        {['Pause and breathe for one minute.', 'Complete the recommended recovery task.', 'Send or receive one buddy encouragement.'].map((step, index) => (
+        <Text style={styles.sectionTitle}>Reset</Text>
+        {['Pause', 'Complete task', 'Get support'].map((step, index) => (
           <View key={step} style={styles.stepCard}>
             <View style={styles.stepNumber}>
               <Text style={styles.stepNumberText}>{index + 1}</Text>
@@ -74,20 +73,16 @@ export default function RecoveryModeScreen() {
           <Text style={styles.taskDetail}>
             {recommendedTask?.target ?? '3 minutes'} · stress regulation and recovery support
           </Text>
-          <Pressable style={styles.primaryButton} onPress={handleTask}>
+          <AnimatedPressable lifted style={styles.primaryButton} onPress={handleTask}>
             <Text style={styles.primaryText}>Start Recommended Task</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.softRow}>
-          <Pressable style={styles.softButton} onPress={() => router.push('/sound-therapy')}>
+          <AnimatedPressable lifted style={styles.softButton} onPress={() => router.push('/sound-therapy')}>
             <Ionicons name="musical-notes-outline" size={18} color={Colors.light.primary} />
             <Text style={styles.softButtonText}>Sound Therapy</Text>
-          </Pressable>
-          <Pressable style={styles.softButton} onPress={() => router.push('/buddy-tree')}>
-            <Ionicons name="people-outline" size={18} color={Colors.light.primary} />
-            <Text style={styles.softButtonText}>Buddy Tree</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
       </ScrollView>
     </View>

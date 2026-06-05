@@ -362,7 +362,7 @@ const initialBuddyGroup: BuddyGroup = {
 export const ENCOURAGEMENT_MESSAGES = [
   "Keep going, you're doing great.",
   "Take a small break, I'm with you.",
-  "Let's protect our tree today.",
+  "Let's keep the flame steady.",
   "You're close to recovery mode completion.",
   'Small steps count.',
 ];

@@ -36,7 +36,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="activity"
         options={{
-          title: 'Recovery',
+          title: 'Log',
           tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <Ionicons name={focused ? 'refresh-circle' : 'refresh-circle-outline'} size={24} color={color} />
           ),

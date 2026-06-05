@@ -100,7 +100,6 @@ export default function RootLayout() {
         <Stack.Screen name="recovery-mode" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="mood-checkin" options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="sound-therapy" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="buddy-tree" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="insights" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="mission" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="focus-lock" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false, animation: 'fade' }} />

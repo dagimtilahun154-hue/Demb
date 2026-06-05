@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAppStore } from '@/store';
 import type { RecoveryTask } from '@/types/burnout';
+import AnimatedPressable from '@/components/AnimatedPressable';
 
 const durations = [3, 5, 10];
 
@@ -70,30 +71,31 @@ export default function SoundTherapyScreen() {
             <Ionicons name={playing ? 'pause' : 'musical-notes-outline'} size={48} color={Colors.light.primary} />
           </View>
           <Text style={styles.title}>Calm Sound Reset</Text>
-          <Text style={styles.subtitle}>Use this when you feel stressed or overloaded. This is stress regulation support.</Text>
+          <Text style={styles.subtitle}>Soft reset.</Text>
           <Text style={styles.timerText}>{mins}:{secs}</Text>
-          <Pressable style={styles.playButton} onPress={() => setPlaying(current => !current)}>
+          <AnimatedPressable lifted style={styles.playButton} onPress={() => setPlaying(current => !current)}>
             <Ionicons name={playing ? 'pause' : 'play'} size={20} color={Colors.light.onPrimary} />
-            <Text style={styles.playText}>{playing ? 'Pause Session' : 'Play Session'}</Text>
-          </Pressable>
+            <Text style={styles.playText}>{playing ? 'Pause' : 'Play'}</Text>
+          </AnimatedPressable>
         </View>
 
         <Text style={styles.sectionTitle}>Duration</Text>
         <View style={styles.durationRow}>
           {durations.map(item => (
-            <Pressable
+            <AnimatedPressable
+              lifted={duration === item}
               key={item}
               onPress={() => setDuration(item)}
               style={[styles.durationChip, duration === item && styles.durationSelected]}
             >
               <Text style={[styles.durationText, duration === item && styles.durationTextSelected]}>{item} min</Text>
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </View>
 
-        <Pressable style={styles.primaryButton} onPress={complete}>
-          <Text style={styles.primaryText}>Complete Session</Text>
-        </Pressable>
+        <AnimatedPressable lifted style={styles.primaryButton} onPress={complete}>
+          <Text style={styles.primaryText}>Complete</Text>
+        </AnimatedPressable>
       </ScrollView>
     </View>
   );

@@ -10,7 +10,6 @@ export default function RewardsScreen() {
   const points = useAppStore(state => state.points);
   const streakCount = useAppStore(state => state.streakCount);
   const completedMissions = useAppStore(state => state.completedMissions);
-  const recoveryTree = useAppStore(state => state.recoveryTree);
   const burnoutRisk = useAppStore(state => state.burnoutRisk);
 
   return (
@@ -26,7 +25,7 @@ export default function RewardsScreen() {
         ]}
       >
         <Text style={styles.title}>Rewards</Text>
-        <Text style={styles.subtitle}>Small wins, stacked daily.</Text>
+        <Text style={styles.subtitle}>Small wins, stacked.</Text>
 
         <View style={styles.heroCard}>
           <Ionicons name="gift-outline" size={42} color="#6C63FF" />
@@ -34,20 +33,10 @@ export default function RewardsScreen() {
           <Text style={styles.label}>Balance Points</Text>
         </View>
 
-        <View style={styles.treeCard}>
-          <Ionicons name="leaf-outline" size={30} color="#1b6b4f" />
-          <View style={styles.treeCopy}>
-            <Text style={styles.treeTitle}>Recovery Tree Growth</Text>
-            <Text style={styles.treeSubtitle}>
-              Level {recoveryTree.level} · {recoveryTree.leavesCount} leaves · {burnoutRisk.recoveryScore}% recovery score
-            </Text>
-          </View>
-        </View>
-
         <View style={styles.grid}>
           <RewardTile icon="flame-outline" value={`${streakCount} Days`} label="Streak" />
           <RewardTile icon="checkmark-circle-outline" value={`${completedMissions.length}`} label="Missions" />
-          <RewardTile icon="sparkles-outline" value="3" label="Badges" />
+          <RewardTile icon="sparkles-outline" value={`${burnoutRisk.recoveryScore}%`} label="Recovery" />
           <RewardTile icon="people-outline" value="12" label="Buddy Wins" />
         </View>
       </ScrollView>
@@ -94,38 +83,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 18,
-  },
-  treeCard: {
-    minHeight: 88,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#ECE9EF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    marginBottom: 18,
-    shadowColor: '#D8D3DE',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-  },
-  treeCopy: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  treeTitle: {
-    color: '#202025',
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  treeSubtitle: {
-    color: '#746F7E',
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '700',
   },
   points: {
     color: '#202025',

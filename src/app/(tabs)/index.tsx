@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabInset } from '@/constants/theme';
 import { useAppStore } from '@/store';
+import AnimatedPressable from '@/components/AnimatedPressable';
 
 const characterByState = {
   good: require('../../../assets/images/demb-happy.png'),
@@ -36,7 +37,6 @@ export default function DashboardScreen() {
     logManualSocialUsage,
     burnoutRisk,
     recoveryPlan,
-    recoveryTree,
     generateRecoveryPlan
   } = useAppStore();
 
@@ -106,7 +106,7 @@ export default function DashboardScreen() {
   const recoveryScore = burnoutRisk.recoveryScore;
   const state = recoveryScore >= 76 ? 'good' : recoveryScore >= 52 ? 'neutral' : 'bad';
   const stateLabel = burnoutRisk.status;
-  const stateCopy = recoveryScore >= 76 ? 'Nice rhythm today.' : recoveryScore >= 52 ? 'A short reset helps.' : 'Pause and recharge.';
+  const stateCopy = recoveryScore >= 76 ? 'Nice rhythm.' : recoveryScore >= 52 ? 'Reset helps.' : 'Recharge now.';
   const displayName = user.name && user.name !== 'Demb Cadet' ? user.name : 'Dagim';
   const activeMission = missions[1] ?? missions[0];
   const challengeProgress = 0.62;
@@ -146,7 +146,7 @@ export default function DashboardScreen() {
           <View style={styles.headerCopy}>
             <Text style={styles.greeting}>Good Afternoon,</Text>
             <Text style={styles.userName}>{displayName}</Text>
-            <Text style={styles.headerSubtitle}>Your recovery journey continues.</Text>
+            <Text style={styles.headerSubtitle}>Recovery continues.</Text>
           </View>
 
           <View style={styles.headerActions}>
@@ -164,7 +164,8 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.hero}>
-          <Pressable 
+          <AnimatedPressable
+            lifted
             style={[
               styles.breakLoopButton,
               breakLoopActive && { backgroundColor: '#6C63FF', borderColor: '#FFFFFF', shadowColor: '#6C63FF', shadowRadius: 36, shadowOpacity: 0.6 }
@@ -177,10 +178,10 @@ export default function DashboardScreen() {
             {breakLoopActive && (
               <Text style={[styles.stopwatchText, { color: '#FFFFFF' }]}>{formatStopwatch(breakLoopTime)}</Text>
             )}
-          </Pressable>
+          </AnimatedPressable>
 
           <Text style={styles.heroCaption}>
-            {breakLoopActive ? 'Patrolling digital loop... Keep going!' : 'Start a recovery session now.'}
+            {breakLoopActive ? 'Loop paused.' : 'Recover now.'}
           </Text>
         </View>
 
@@ -227,11 +228,11 @@ export default function DashboardScreen() {
             <Text style={styles.burnoutValue}>{burnoutRisk.burnoutRiskScore}%</Text>
             <Text style={styles.burnoutMeta}>{stateLabel}</Text>
           </View>
-          <Pressable style={styles.burnoutCard} onPress={() => router.push('/insights')}>
-            <Text style={styles.cardLabel}>Main Cause Today</Text>
+          <AnimatedPressable lifted style={styles.burnoutCard} onPress={() => router.push('/insights')}>
+            <Text style={styles.cardLabel}>Main Cause</Text>
             <Text style={styles.causeText}>{mainCause}</Text>
             <Text style={styles.burnoutMeta}>View insights</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.statsRow}>
@@ -242,7 +243,7 @@ export default function DashboardScreen() {
 
         <View style={styles.planCard}>
           <View style={styles.cardHeader}>
-            <Text style={styles.sectionTitle}>Today's Recovery Plan</Text>
+            <Text style={styles.sectionTitle}>Plan</Text>
             <Pressable onPress={openPlan}>
               <Ionicons name="sparkles-outline" size={22} color="#6D6879" />
             </Pressable>
@@ -256,25 +257,25 @@ export default function DashboardScreen() {
               />
             </View>
             <View style={styles.challengeCopy}>
-              <Text style={styles.challengeTitle}>{planTask?.title ?? 'Generate your personal recovery plan'}</Text>
+              <Text style={styles.challengeTitle}>{planTask?.title ?? 'Generate recovery plan'}</Text>
               <Text style={styles.miniLabel}>
-                {planTask ? `${planTask.target} · +${planTask.rewardPoints} points` : 'Based on your observation pattern'}
+                {planTask ? `${planTask.target} · +${planTask.rewardPoints}` : 'From your signals'}
               </Text>
             </View>
           </View>
           <View style={styles.planActions}>
-            <Pressable style={[styles.outlineButton, styles.planButton]} onPress={openPlan}>
+            <AnimatedPressable lifted style={[styles.outlineButton, styles.planButton]} onPress={openPlan}>
               <Text style={styles.outlineButtonText}>{planTask ? 'View Plan' : 'Generate Plan'}</Text>
-            </Pressable>
-            <Pressable style={[styles.outlineButton, styles.planButton]} onPress={() => router.push('/mood-checkin')}>
+            </AnimatedPressable>
+            <AnimatedPressable lifted style={[styles.outlineButton, styles.planButton]} onPress={() => router.push('/mood-checkin')}>
               <Text style={styles.outlineButtonText}>Mood Check-In</Text>
-            </Pressable>
+            </AnimatedPressable>
           </View>
         </View>
 
         <View style={styles.challengeCard}>
           <View style={styles.cardHeader}>
-            <Text style={styles.sectionTitle}>Today's Challenge</Text>
+            <Text style={styles.sectionTitle}>Challenge</Text>
             <Ionicons name="ellipsis-horizontal" size={22} color="#6D6879" />
           </View>
 
@@ -292,15 +293,15 @@ export default function DashboardScreen() {
             <Text style={styles.progressText}>125 / 200</Text>
           </View>
 
-          <Pressable style={styles.outlineButton} onPress={startMission}>
+          <AnimatedPressable lifted style={styles.outlineButton} onPress={startMission}>
             <Text style={styles.outlineButtonText}>Continue Challenge</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.digitalCard}>
           <View style={styles.digitalTitleRow}>
             <Ionicons name="eye-outline" size={24} color="#746D87" />
-            <Text style={styles.sectionTitle}>Today's Digital{'\n'}Balance</Text>
+            <Text style={styles.sectionTitle}>Digital{'\n'}Balance</Text>
           </View>
 
           <View style={styles.screenTimeRow}>
@@ -314,17 +315,17 @@ export default function DashboardScreen() {
           <UsageRow icon="chatbubble-ellipses-outline" app="Snapchat" time={formatMinutes(socialUsage.Snapchat)} />
 
           <View style={styles.insightBox}>
-            <Text style={styles.insightText}>Social time is running high. A quick recovery break can help.</Text>
+            <Text style={styles.insightText}>Social time is high. Reset helps.</Text>
           </View>
 
-          <Pressable style={styles.darkButton} onPress={startMission}>
+          <AnimatedPressable lifted style={styles.darkButton} onPress={startMission}>
             <Text style={styles.darkButtonText}>Start Recovery</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.buddyCard}>
           <View style={styles.cardHeader}>
-            <Text style={styles.sectionTitle}>Recovery Buddy</Text>
+            <Text style={styles.sectionTitle}>Buddy</Text>
             <View style={styles.onlineRow}>
               <View style={styles.onlineDot} />
               <Text style={styles.onlineText}>Online</Text>
@@ -335,7 +336,7 @@ export default function DashboardScreen() {
             <Image source={require('../../../assets/images/logo.jpg')} style={styles.buddyAvatar} contentFit="cover" />
             <View>
               <Text style={styles.buddyName}>Abel</Text>
-              <Text style={styles.buddyStatus}>Currently Recovering</Text>
+              <Text style={styles.buddyStatus}>Recovering</Text>
             </View>
           </View>
 
@@ -351,23 +352,10 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <Pressable style={styles.outlineButton} onPress={() => router.push('/(tabs)/circles')}>
-            <Text style={styles.outlineButtonText}>View Buddy</Text>
-          </Pressable>
+          <AnimatedPressable lifted style={styles.outlineButton} onPress={() => router.push('/(tabs)/circles')}>
+            <Text style={styles.outlineButtonText}>Buddies</Text>
+          </AnimatedPressable>
         </View>
-
-        <Pressable style={styles.treePreviewCard} onPress={() => router.push('/buddy-tree')}>
-          <View style={styles.treePreviewIcon}>
-            <Ionicons name="leaf" size={28} color="#1b6b4f" />
-          </View>
-          <View style={styles.challengeCopy}>
-            <Text style={styles.challengeTitle}>Buddy Tree</Text>
-            <Text style={styles.miniLabel}>
-              Level {recoveryTree.level} · {recoveryTree.leavesCount} leaves · shared growth
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={19} color="#746D87" />
-        </Pressable>
 
         <View style={styles.quoteCard}>
           <Text style={styles.quoteText}>"Small progress every day creates lasting change."</Text>
@@ -948,30 +936,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
-  },
-  treePreviewCard: {
-    minHeight: 88,
-    borderRadius: 27,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    marginBottom: 32,
-    borderWidth: 1,
-    borderColor: '#ECE9EF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#D8D3DE',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-  },
-  treePreviewIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#a6f2cf',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
   },
   onlineRow: {
     flexDirection: 'row',

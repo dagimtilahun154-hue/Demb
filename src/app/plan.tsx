@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAppStore } from '@/store';
+import AnimatedPressable from '@/components/AnimatedPressable';
 
 export default function BurnoutPlanScreen() {
   const router = useRouter();
@@ -36,18 +37,16 @@ export default function BurnoutPlanScreen() {
         </View>
 
         <View style={styles.heroCard}>
-          <Text style={styles.eyebrow}>Mock AI Recovery Plan</Text>
-          <Text style={styles.title}>Your Burnout Prevention Plan is ready.</Text>
-          <Text style={styles.subtitle}>
-            Demb turned your wellness pattern into local rules, gentle tasks, and buddy support.
-          </Text>
+          <Text style={styles.eyebrow}>AI Plan</Text>
+          <Text style={styles.title}>Recovery plan ready.</Text>
+          <Text style={styles.subtitle}>Rules, tasks, support.</Text>
           <View style={styles.statusPill}>
             <Ionicons name="analytics-outline" size={16} color={Colors.light.primary} />
             <Text style={styles.statusText}>{burnoutRisk.status} · {burnoutRisk.burnoutRiskScore}% risk indicators</Text>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Primary causes today</Text>
+        <Text style={styles.sectionTitle}>Causes</Text>
         <View style={styles.chipRow}>
           {(plan?.primaryCauses.length ? plan.primaryCauses : burnoutRisk.causes).map(cause => (
             <View key={cause} style={styles.causeChip}>
@@ -56,7 +55,7 @@ export default function BurnoutPlanScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Recovery tasks</Text>
+        <Text style={styles.sectionTitle}>Tasks</Text>
         {plan?.recoveryTasks.map(task => (
           <View key={task.id} style={styles.taskCard}>
             <View style={styles.taskIcon}>
@@ -73,19 +72,19 @@ export default function BurnoutPlanScreen() {
           </View>
         ))}
 
-        <Text style={styles.sectionTitle}>Digital rules</Text>
+        <Text style={styles.sectionTitle}>Rules</Text>
         {plan?.digitalRules.map(rule => (
           <View key={rule.id} style={styles.ruleCard}>
             <Text style={styles.ruleTitle}>{rule.appName}</Text>
             <Text style={styles.ruleDetail}>
-              {rule.allowedMinutes} minutes per {rule.windowMinutes} minute window, then recovery support.
+              {rule.allowedMinutes}m per {rule.windowMinutes}m window.
             </Text>
           </View>
         ))}
 
-        <Pressable style={styles.primaryButton} onPress={handleActivate}>
+        <AnimatedPressable lifted style={styles.primaryButton} onPress={handleActivate}>
           <Text style={styles.primaryText}>Activate Plan</Text>
-        </Pressable>
+        </AnimatedPressable>
       </ScrollView>
     </View>
   );

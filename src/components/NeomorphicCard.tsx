@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet, View, ViewProps, Pressable, PressableProps } from 'react-native';
+import { PressableProps, StyleSheet, View, ViewProps } from 'react-native';
 import { Colors, Radius, Shadows } from '@/constants/theme';
 import { useColorScheme } from 'react-native';
+import AnimatedPressable from './AnimatedPressable';
 
 interface NeomorphicCardProps extends ViewProps {
   children: React.ReactNode;
@@ -37,16 +38,14 @@ export default function NeomorphicCard({
 
   if (onPress) {
     return (
-      <Pressable
+      <AnimatedPressable
         onPress={onPress}
-        style={({ pressed }) => [
-          cardStyle,
-          pressed && styles.pressed,
-        ]}
+        lifted
+        style={cardStyle}
         {...props}
       >
         {children}
-      </Pressable>
+      </AnimatedPressable>
     );
   }
 
@@ -62,9 +61,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     padding: 20,
     overflow: 'visible',
-  },
-  pressed: {
-    transform: [{ scale: 0.97 }],
-    opacity: 0.9,
   },
 });
