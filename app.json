@@ -52,7 +52,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Demb needs your location to track walking missions."
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true
