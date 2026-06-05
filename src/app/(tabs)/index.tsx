@@ -22,10 +22,6 @@ export default function DashboardScreen() {
   const { 
     user, 
     balance, 
-    streakCount, 
-    buddies, 
-    completedMissions, 
-    points, 
     missions,
     breakLoopActive,
     breakLoopTime,
@@ -235,11 +231,7 @@ export default function DashboardScreen() {
           </AnimatedPressable>
         </View>
 
-        <View style={styles.statsRow}>
-          <StatCard icon="flame-outline" value={`${streakCount} Days`} label="Streak" />
-          <StatCard icon="people-outline" value={`${Math.max(buddies.length, 1)} Buddy`} label="Support" />
-          <StatCard icon="gift-outline" value={`${Math.max(completedMissions.length, points > 0 ? 3 : 0)} Unlocked`} label="Rewards" />
-        </View>
+
 
         <View style={styles.planCard}>
           <View style={styles.cardHeader}>
@@ -357,23 +349,13 @@ export default function DashboardScreen() {
           </AnimatedPressable>
         </View>
 
-        <View style={styles.quoteCard}>
-          <Text style={styles.quoteText}>"Small progress every day creates lasting change."</Text>
-        </View>
+
       </ScrollView>
     </View>
   );
 }
 
-function StatCard({ icon, value, label }: { icon: string; value: string; label: string }) {
-  return (
-    <View style={styles.statCard}>
-      <Ionicons name={icon as any} size={22} color="#746D87" />
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
+
 
 function UsageRow({ icon, app, time }: { icon: string; app: string; time: string }) {
   return (
