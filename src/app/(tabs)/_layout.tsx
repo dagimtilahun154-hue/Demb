@@ -52,6 +52,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="controller"
+        options={{
+          title: 'Shield',
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+            <Ionicons name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="rewards"
         options={{
           title: 'Rewards',
