@@ -34,7 +34,9 @@ export type BehaviorEventType =
   | 'recovery_session_completed'
   | 'buddy_encouragement_sent'
   | 'shield_triggered'
-  | 'plan_rule_executed';
+  | 'plan_rule_executed'
+  | 'support_chat_message'
+  | 'feeling_prompt';
 
 export interface BehaviorEvent {
   id: string;
@@ -53,6 +55,34 @@ export interface MoodCheckIn {
   overwhelmed: boolean;
   note?: string;
   createdAt: string;
+}
+
+export type SupportChatRole = 'user' | 'assistant' | 'system';
+
+export type SupportChatAction =
+  | 'start_focus'
+  | 'start_recovery_task'
+  | 'delay_app'
+  | 'update_intention'
+  | 'ask_buddy'
+  | 'mood_checkin';
+
+export interface SupportChatMessage {
+  id: string;
+  role: SupportChatRole;
+  text: string;
+  createdAt: string;
+  synced: boolean;
+  source: 'user' | 'groq' | 'local' | 'prompt';
+  suggestedAction?: SupportChatAction;
+}
+
+export interface FeelingPromptState {
+  visible: boolean;
+  reason: 'daily' | 'high_usage' | null;
+  lastDailyPromptDate: string | null;
+  lastHighUsagePromptDate: string | null;
+  lastDismissedAt: string | null;
 }
 
 export interface ScreenUsageSnapshot {
@@ -112,6 +142,11 @@ export interface RecoveryPlan {
   buddyActions: string[];
   explanation: string;
   active: boolean;
+  lockScreenMessage?: string;
+  supportPrompts?: string[];
+  dailyCheckInTime?: string;
+  emotionalSupportTone?: string;
+  aiActions?: SupportChatAction[];
 }
 
 export interface DigitalRule {

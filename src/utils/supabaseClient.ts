@@ -26,8 +26,17 @@ export async function getCachedAuthUser() {
     return null;
   }
 
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user ?? null;
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.log('[Supabase] Cached session fetch skipped:', error.message);
+      return null;
+    }
+    return data.session?.user ?? null;
+  } catch (error) {
+    console.log('[Supabase] Cached session fetch failed:', error);
+    return null;
+  }
 }
 
 export async function signUpWithEmail({
@@ -40,30 +49,46 @@ export async function signUpWithEmail({
   name: string;
 }) {
   if (!hasSupabaseConfig || !supabase) {
-    return { user: null, error: 'Supabase is not configured.' };
+    return { user: null, session: null, needsEmailConfirmation: false, error: 'Supabase is not configured.' };
   }
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { name } },
-  });
-
-  if (error) {
-    return { user: null, error: error.message };
-  }
-
-  if (data.user) {
-    await syncUserProfile({
-      id: data.user.id,
-      name,
-      recovery_score: 0,
-      streak_count: 0,
-      current_status: 'Balanced',
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
     });
-  }
 
-  return { user: data.user, error: null };
+    if (error) {
+      return { user: null, session: null, needsEmailConfirmation: false, error: error.message };
+    }
+
+    if (data.user) {
+      syncUserProfile({
+        id: data.user.id,
+        name,
+        recovery_score: 0,
+        streak_count: 0,
+        current_status: 'Balanced',
+      }).catch((syncError) => {
+        console.log('[Supabase] Initial profile sync failed:', syncError);
+      });
+    }
+
+    return {
+      user: data.user,
+      session: data.session,
+      needsEmailConfirmation: Boolean(data.user && !data.session),
+      error: null,
+    };
+  } catch (error: any) {
+    return {
+      user: null,
+      session: null,
+      needsEmailConfirmation: false,
+      error: error?.message ?? 'Registration failed. Check your internet connection.',
+    };
+  }
 }
 
 export async function signInWithEmail({
@@ -74,15 +99,23 @@ export async function signInWithEmail({
   password: string;
 }) {
   if (!hasSupabaseConfig || !supabase) {
-    return { user: null, error: 'Supabase is not configured.' };
+    return { user: null, session: null, error: 'Supabase is not configured.' };
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    return { user: null, error: error.message };
-  }
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { user: null, session: null, error: error.message };
+    }
 
-  return { user: data.user, error: null };
+    return { user: data.user, session: data.session, error: null };
+  } catch (error: any) {
+    return {
+      user: null,
+      session: null,
+      error: error?.message ?? 'Sign in failed. Check your internet connection.',
+    };
+  }
 }
 
 export async function signOutSupabase() {
@@ -96,16 +129,21 @@ export async function syncUserProfile(profile: SupabaseProfile): Promise<boolean
     return false;
   }
 
-  const { error } = await supabase
-    .from('profiles')
-    .upsert(profile, { onConflict: 'id' });
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .upsert(profile, { onConflict: 'id' });
 
-  if (error) {
-    console.log('[Supabase] Profile sync skipped:', error.message);
+    if (error) {
+      console.log('[Supabase] Profile sync skipped:', error.message);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.log('[Supabase] Profile sync failed:', error);
     return false;
   }
-
-  return true;
 }
 
 export async function fetchUserProfile(userId: string): Promise<Partial<SupabaseProfile> | null> {
@@ -113,18 +151,23 @@ export async function fetchUserProfile(userId: string): Promise<Partial<Supabase
     return null;
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle();
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
 
-  if (error) {
-    console.log('[Supabase] Profile fetch skipped:', error.message);
+    if (error) {
+      console.log('[Supabase] Profile fetch skipped:', error.message);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.log('[Supabase] Profile fetch failed:', error);
     return null;
   }
-
-  return data;
 }
 
 export async function fetchBuddyGroupData(groupId: string): Promise<any | null> {

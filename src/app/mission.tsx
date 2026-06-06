@@ -299,11 +299,9 @@ export default function MissionTimerScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + Spacing.three, paddingBottom: insets.bottom + Spacing.four }]}>
         <View style={styles.successHeader}>
-          <Image
-            source={require('../../assets/images/demb_celebrate.png')}
-            style={styles.successMascot}
-            contentFit="contain"
-          />
+          <View style={[styles.successMascot, { justifyContent: 'center', alignItems: 'center' }]}>
+            <Ionicons name="trophy" size={80} color={colors.primary} />
+          </View>
           <Text style={[styles.successTitle, { color: colors.textPrimary }]}>Mission Completed!</Text>
           <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
             You successfully arrested distractions, completed your physical task, and earned points.
@@ -345,11 +343,9 @@ export default function MissionTimerScreen() {
         {mission.id === 'm2' ? (
           // ─── NATURE WALK MISSION (GPS & Pedometer Real Sensors) ───
           <View style={styles.taskSection}>
-            <Image
-              source={require('../../assets/images/demb_progress.png')}
-              style={styles.mascotImg}
-              contentFit="contain"
-            />
+            <View style={[styles.mascotImg, { justifyContent: 'center', alignItems: 'center' }]}>
+              <Ionicons name="footsteps" size={80} color={colors.primary} />
+            </View>
             <Text style={[styles.taskTitle, { color: colors.textPrimary }]}>Nature Walk Patrol</Text>
             <Text style={[styles.taskDesc, { color: colors.textSecondary }]}>
               Officer Demb requires physical motion. Walk around to update steps and GPS distance!

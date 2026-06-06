@@ -7,7 +7,7 @@
     "icon": "./assets/images/demb-app-logo.png",
     "scheme": "demb",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -64,6 +64,9 @@
       "typedRoutes": true
     },
     "extra": {
+      "EXPO_PUBLIC_SUPABASE_URL": "https://xgzdszsfnilsqgqrnkxo.supabase.co",
+      "EXPO_PUBLIC_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnemRzenNmbmlsc3FncXJua3hvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NjcyNzQsImV4cCI6MjA5NjI0MzI3NH0.fSoMmoeFADXy6wzcppNsCOh19E-68XzfMHPsjZJa1BA",
+      "EXPO_PUBLIC_AI_ENGINE_URL": "https://dagi321-dembai.hf.space",
       "router": {},
       "eas": {
         "projectId": "5152578b-0be5-4f3e-ba3e-99fbb8fe1dce"

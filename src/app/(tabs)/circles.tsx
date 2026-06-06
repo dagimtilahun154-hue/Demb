@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Animated, Easing, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { Animated, Easing, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomTabInset, Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 import AnimatedPressable from '@/components/AnimatedPressable';
 import NeomorphicCard from '@/components/NeomorphicCard';
+import { BottomTabInset, Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAppStore } from '@/store';
 import type { Buddy } from '@/types/burnout';
 
@@ -16,9 +16,7 @@ type FlamePalette = {
   mid: string;
   core: string;
   glow: string;
-  haze: string;
   focus: string;
-  surface: string;
   border: string;
   text: string;
   muted: string;
@@ -27,11 +25,8 @@ type FlamePalette = {
 const SUPPORT_MESSAGE = 'Take a soft reset with me.';
 
 export default function WellnessCirclesScreen() {
-  const scheme = useColorScheme() ?? 'light';
-  const colors = Colors[scheme];
-  const isDark = scheme === 'dark';
+  const colors = Colors.light;
   const insets = useSafeAreaInsets();
-
   const {
     buddies,
     buddyRequests,
@@ -89,34 +84,26 @@ export default function WellnessCirclesScreen() {
   const myMember = buddyGroup.members.find(member => member.id === 'me');
   const personalStreak = myMember?.personalStreak ?? streakCount;
   const streakUnlocked = personalStreak >= 3;
-  const isCritical =
-    burnoutRisk.status === 'Critical' ||
-    buddyGroup.members.some(member => member.currentState === 'Critical');
-  const averageRecovery = Math.round(
-    buddyGroup.members.reduce((sum, member) => sum + member.recoveryScore, 0) / Math.max(1, buddyGroup.members.length)
-  );
-  const effortScore = Math.min(
-    100,
-    Math.round(
-      averageRecovery * 0.65 +
-        Math.min(buddyGroup.groupStreak, 14) * 1.8 +
-        Math.min(recoveryTree.level, 10) * 1.1
-    )
-  );
-  const palette = getFlamePalette({ colors, isDark, isCritical, streakUnlocked, effortScore });
-  const smallFlameCount = streakUnlocked ? Math.min(4, buddyMembers.length) : 0;
-  const mainFlameSize = streakUnlocked
-    ? Math.min(420, 285 + effortScore * 1.18 + Math.min(personalStreak, 14) * 3)
-    : 250;
-  const friendStreak = buddyGroup.groupStreak;
+  const isCritical = burnoutRisk.status === 'Critical';
+  const effortScore = Math.min(100, Math.round(burnoutRisk.recoveryScore * 0.72 + Math.min(personalStreak, 14) * 2));
+  const palette = getFlamePalette({ colors, isCritical, streakUnlocked, effortScore });
+  const flameSize = streakUnlocked
+    ? Math.min(292, 208 + effortScore * 0.62 + Math.min(personalStreak, 14) * 2.2)
+    : 188;
 
-  const label = isCritical
-    ? 'Critical'
-    : !streakUnlocked
-      ? 'Day 1'
-      : effortScore >= 76
-        ? 'Green'
-        : 'Violet';
+  const leaderboard = useMemo(() => {
+    const me: BuddyDisplay = {
+      id: 'me',
+      name: 'You',
+      personalStreak,
+      recoveryScore: burnoutRisk.recoveryScore,
+      currentState: burnoutRisk.status,
+      treeContribution: recoveryTree.leavesCount,
+    };
+    return [me, ...buddyMembers]
+      .sort((a, b) => b.personalStreak - a.personalStreak || b.recoveryScore - a.recoveryScore)
+      .slice(0, 8);
+  }, [buddyMembers, personalStreak, burnoutRisk.recoveryScore, burnoutRisk.status, recoveryTree.leavesCount]);
 
   const handleAddBuddy = () => {
     if (!canAddBuddy) return;
@@ -130,17 +117,10 @@ export default function WellnessCirclesScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: palette.surface }]}>
-      <FlameBackground
-        palette={palette}
-        members={visibleBuddies}
-        effortScore={effortScore}
-        mainSize={mainFlameSize}
-        smallFlameCount={smallFlameCount}
-        streakUnlocked={streakUnlocked}
-        personalStreak={streakUnlocked ? personalStreak : 1}
-        friendStreak={friendStreak}
-      />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        <AnimatedGlow color={palette.glow} />
+      </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -154,25 +134,21 @@ export default function WellnessCirclesScreen() {
       >
         <View style={styles.topBar}>
           <View>
-            <Text style={[styles.title, { color: palette.text }]}>Buddies</Text>
-            <Text style={[styles.microLabel, { color: palette.muted }]}>{label} flame</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Buddies</Text>
+            <Text style={[styles.microLabel, { color: colors.textMuted }]}>Streak competition</Text>
+          </View>
+          <View style={[styles.statusPill, { backgroundColor: palette.focus, borderColor: palette.border }]}>
+            <Ionicons name="flame" size={16} color={palette.outer} />
+            <Text style={[styles.statusPillText, { color: palette.text }]}>{personalStreak} days</Text>
           </View>
         </View>
 
-        <View
-          style={[
-            styles.searchBar,
-            {
-              backgroundColor: isDark ? 'rgba(42,39,48,0.78)' : 'rgba(255,255,255,0.82)',
-              borderColor: palette.border,
-            },
-          ]}
-        >
-          <Ionicons name="search-outline" size={19} color={palette.muted} />
+        <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.outlineVariant + '55' }]}>
+          <Ionicons name="search-outline" size={19} color={colors.textMuted} />
           <TextInput
-            style={[styles.searchInput, { color: palette.text }]}
-            placeholder="Search or add"
-            placeholderTextColor={palette.muted}
+            style={[styles.searchInput, { color: colors.textPrimary }]}
+            placeholder="Search or add buddy"
+            placeholderTextColor={colors.textMuted}
             value={searchValue}
             onChangeText={setSearchValue}
             returnKeyType="send"
@@ -182,26 +158,86 @@ export default function WellnessCirclesScreen() {
             onPress={handleAddBuddy}
             disabled={!canAddBuddy}
             lifted={canAddBuddy}
-            style={[
-              styles.addButton,
-              { backgroundColor: canAddBuddy ? palette.outer : palette.haze },
-            ]}
+            style={[styles.addButton, { backgroundColor: canAddBuddy ? colors.primary : colors.surfaceContainerHigh }]}
           >
-            <Ionicons name="person-add-outline" size={18} color={canAddBuddy ? '#ffffff' : palette.muted} />
+            <Ionicons name="person-add-outline" size={18} color={canAddBuddy ? '#ffffff' : colors.textMuted} />
           </AnimatedPressable>
         </View>
 
-        <View style={styles.flameSpace} pointerEvents="none" />
+        <NeomorphicCard style={styles.streakCard} bgColor={palette.focus}>
+          <View style={styles.streakCardHeader}>
+            <View>
+              <Text style={[styles.cardEyebrow, { color: palette.muted }]}>Your streak flame</Text>
+              <Text style={[styles.cardTitle, { color: palette.text }]}>Owner streak only</Text>
+            </View>
+            <View style={[styles.scoreBadge, { backgroundColor: colors.surface, borderColor: palette.border }]}>
+              <Text style={[styles.scoreBadgeValue, { color: palette.text }]}>{effortScore}%</Text>
+            </View>
+          </View>
 
-        <View style={styles.statsRow}>
-          <MiniStat value={`${effortScore}%`} label="Effort" color={palette.text} muted={palette.muted} />
-          <MiniStat value={`${buddyMembers.length}`} label="Buddies" color={palette.text} muted={palette.muted} />
-          <MiniStat value={`${burnoutRisk.recoveryScore}%`} label="Score" color={palette.text} muted={palette.muted} />
+          <View style={styles.fireStage}>
+            <AnimatedFlame palette={palette} size={flameSize} />
+            <CampfireLogs palette={palette} />
+            <View style={[styles.streakInsideFlame, { borderColor: palette.border }]}>
+              <Text style={[styles.streakInsideNumber, { color: palette.text }]}>{Math.max(1, personalStreak)}</Text>
+              <Text style={[styles.streakInsideLabel, { color: palette.muted }]}>days</Text>
+            </View>
+          </View>
+        </NeomorphicCard>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Leaderboard</Text>
+            <Text style={[styles.sectionMeta, { color: colors.textMuted }]}>{leaderboard.length} players</Text>
+          </View>
+          <NeomorphicCard style={styles.leaderboardCard} bgColor={colors.surface}>
+            {leaderboard.map((member, index) => {
+              const isMe = member.id === 'me';
+              return (
+                <View
+                  key={member.id}
+                  style={[
+                    styles.leaderRow,
+                    index < leaderboard.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.outlineVariant + '25' },
+                  ]}
+                >
+                  <View style={[styles.rankCircle, { backgroundColor: isMe ? colors.primaryContainer : colors.surfaceContainer }]}>
+                    <Text style={[styles.rankText, { color: isMe ? colors.primary : colors.textSecondary }]}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.leaderNameBlock}>
+                    <Text style={[styles.leaderName, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {member.name}
+                    </Text>
+                    <Text style={[styles.leaderSub, { color: colors.textMuted }]}>
+                      {member.recoveryScore}% recovery
+                    </Text>
+                  </View>
+                  <View style={styles.leaderScore}>
+                    <Ionicons name="flame" size={16} color={isMe ? palette.outer : colors.textMuted} />
+                    <Text style={[styles.leaderDays, { color: isMe ? palette.text : colors.textSecondary }]}>
+                      {member.personalStreak}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </NeomorphicCard>
         </View>
+
+        {visibleBuddies.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Buddy Names</Text>
+            <View style={styles.nameWrap}>
+              {visibleBuddies.map((member, index) => (
+                <FloatingNameChip key={member.id} name={member.name} index={index} color={palette.outer} />
+              ))}
+            </View>
+          </View>
+        )}
 
         {pendingIncoming.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: palette.text }]}>Requests</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Requests</Text>
             {pendingIncoming.map(request => (
               <NeomorphicCard key={request.id} style={styles.requestCard}>
                 <Text style={[styles.requestName, { color: colors.textPrimary }]}>{request.name}</Text>
@@ -226,221 +262,124 @@ export default function WellnessCirclesScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: palette.text }]}>Updates</Text>
-          {buddyFeed.slice(0, 2).map(feed => (
-            <NeomorphicCard key={feed.id} style={styles.feedCard}>
-              <View style={styles.feedTop}>
-                <Text style={[styles.feedName, { color: colors.textPrimary }]}>{feed.name}</Text>
-                <Text style={[styles.feedTime, { color: colors.textMuted }]}>{feed.timestamp}</Text>
-              </View>
-              <Text style={[styles.feedDetail, { color: colors.textSecondary }]} numberOfLines={1}>
-                {feed.detail}
-              </Text>
-              {feed.event === 'lock' && (
-                <AnimatedPressable
-                  lifted
-                  onPress={() => handleSupportBuddy(feed.name)}
-                  style={[styles.supportButton, { backgroundColor: colors.primaryContainer }]}
-                >
-                  <Ionicons name="heart-outline" size={15} color={colors.primary} />
-                  <Text style={[styles.supportText, { color: colors.primary }]}>Support</Text>
-                </AnimatedPressable>
-              )}
-            </NeomorphicCard>
-          ))}
-        </View>
+        {buddyFeed.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Updates</Text>
+            {buddyFeed.slice(0, 2).map(feed => (
+              <NeomorphicCard key={feed.id} style={styles.feedCard}>
+                <View style={styles.feedTop}>
+                  <Text style={[styles.feedName, { color: colors.textPrimary }]}>{feed.name}</Text>
+                  <Text style={[styles.feedTime, { color: colors.textMuted }]}>{feed.timestamp}</Text>
+                </View>
+                <Text style={[styles.feedDetail, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {feed.detail}
+                </Text>
+                {feed.event === 'lock' && (
+                  <AnimatedPressable
+                    lifted
+                    onPress={() => handleSupportBuddy(feed.name)}
+                    style={[styles.supportButton, { backgroundColor: colors.primaryContainer }]}
+                  >
+                    <Ionicons name="heart-outline" size={15} color={colors.primary} />
+                    <Text style={[styles.supportText, { color: colors.primary }]}>Support</Text>
+                  </AnimatedPressable>
+                )}
+              </NeomorphicCard>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-function FlameBackground({
-  palette,
-  members,
-  effortScore,
-  mainSize,
-  smallFlameCount,
-  streakUnlocked,
-  personalStreak,
-  friendStreak,
-}: {
-  palette: FlamePalette;
-  members: BuddyDisplay[];
-  effortScore: number;
-  mainSize: number;
-  smallFlameCount: number;
-  streakUnlocked: boolean;
-  personalStreak: number;
-  friendStreak: number;
-}) {
-  const stageMembers = members.slice(0, 6);
-  const clusterFlames = [
-    { xOffset: -172, top: 378, size: 124 },
-    { xOffset: 54, top: 382, size: 126 },
-    { xOffset: -118, top: 462, size: 96 },
-    { xOffset: 76, top: 464, size: 96 },
-  ];
-
-  return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      <View style={[styles.fireFocusPanel, { backgroundColor: palette.focus, borderColor: palette.border }]} />
-      <View style={[styles.backgroundWash, { backgroundColor: palette.haze }]} />
-      <AnimatedFlame
-        id="main"
-        palette={palette}
-        size={mainSize}
-        left="50%"
-        top={170}
-        xOffset={-mainSize / 2}
-        intensity={0.95 + effortScore / 360}
-      />
-      {streakUnlocked &&
-        clusterFlames.slice(0, smallFlameCount).map((flame, index) => (
-          <AnimatedFlame
-            key={`${flame.xOffset}-${index}`}
-            id={`small_${index}`}
-            palette={palette}
-            size={flame.size}
-            left="50%"
-            top={flame.top}
-            xOffset={flame.xOffset}
-            intensity={0.8 + index * 0.07}
-            delay={index * 180}
-          />
-        ))}
-      <CampfireStreaks palette={palette} personalStreak={personalStreak} friendStreak={friendStreak} />
-      <CampfireLogs palette={palette} />
-      {stageMembers.map((member, index) => (
-        <FloatingBuddyName key={member.id} member={member} index={index} palette={palette} />
-      ))}
-    </View>
-  );
-}
-
-function AnimatedFlame({
-  id,
-  palette,
-  size,
-  left,
-  top,
-  xOffset,
-  intensity,
-  delay = 0,
-}: {
-  id: string;
-  palette: FlamePalette;
-  size: number;
-  left: string;
-  top: number;
-  xOffset: number;
-  intensity: number;
-  delay?: number;
-}) {
-  const flicker = React.useRef(new Animated.Value(0)).current;
-
+function AnimatedGlow({ color }: { color: string }) {
+  const drift = React.useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(flicker, {
-          toValue: 1,
-          duration: 1350 + delay,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(flicker, {
-          toValue: 0,
-          duration: 1350 + delay,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
+        Animated.timing(drift, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(drift, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
-  }, [delay, flicker]);
+  }, [drift]);
 
-  const animatedStyle = {
-    transform: [
-      {
-        translateX: flicker.interpolate({
-          inputRange: [0, 1],
-          outputRange: [xOffset - 4, xOffset + 5],
-        }),
-      },
-      {
-        translateY: flicker.interpolate({
-          inputRange: [0, 1],
-          outputRange: [2, -7],
-        }),
-      },
-      {
-        scaleX: flicker.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.97 * intensity, 1.05 * intensity],
-        }),
-      },
-      {
-        scaleY: flicker.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1.03 * intensity, 0.97 * intensity],
-        }),
-      },
-      {
-        rotate: flicker.interpolate({
-          inputRange: [0, 1],
-          outputRange: ['-1.5deg', '1.8deg'],
-        }),
-      },
-    ],
-    opacity: flicker.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.92, 1],
-    }),
-  };
+  return (
+    <Animated.View
+      style={[
+        styles.pageGlow,
+        {
+          backgroundColor: color,
+          transform: [
+            { translateX: drift.interpolate({ inputRange: [0, 1], outputRange: [-20, 20] }) },
+            { translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [-12, 12] }) },
+          ],
+        },
+      ]}
+    />
+  );
+}
+
+function AnimatedFlame({ palette, size }: { palette: FlamePalette; size: number }) {
+  const flicker = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flicker, { toValue: 1, duration: 1250, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(flicker, { toValue: 0, duration: 1180, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [flicker]);
 
   return (
     <Animated.View
       style={[
         styles.flameLayer,
         {
-          left: left as any,
-          top,
           width: size,
-          height: size * 1.2,
+          height: size * 1.12,
+          transform: [
+            { translateY: flicker.interpolate({ inputRange: [0, 1], outputRange: [3, -6] }) },
+            { scaleX: flicker.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1.05] }) },
+            { scaleY: flicker.interpolate({ inputRange: [0, 1], outputRange: [1.04, 0.98] }) },
+            { rotate: flicker.interpolate({ inputRange: [0, 1], outputRange: ['-1deg', '1.5deg'] }) },
+          ],
         },
-        animatedStyle,
       ]}
     >
-      <FlameSvg id={id} palette={palette} />
+      <FlameSvg palette={palette} />
     </Animated.View>
   );
 }
 
-function FlameSvg({ id, palette }: { id: string; palette: FlamePalette }) {
+function FlameSvg({ palette }: { palette: FlamePalette }) {
   return (
     <Svg width="100%" height="100%" viewBox="0 0 220 264">
       <Defs>
-        <RadialGradient id={`glow_${id}`} cx="50%" cy="58%" r="56%">
+        <RadialGradient id="cardGlow" cx="50%" cy="58%" r="56%">
           <Stop offset="0%" stopColor={palette.glow} stopOpacity="0.68" />
-          <Stop offset="62%" stopColor={palette.glow} stopOpacity="0.22" />
+          <Stop offset="64%" stopColor={palette.glow} stopOpacity="0.22" />
           <Stop offset="100%" stopColor={palette.glow} stopOpacity="0" />
         </RadialGradient>
-        <LinearGradient id={`outer_${id}`} x1="50%" y1="4%" x2="55%" y2="100%">
+        <LinearGradient id="cardOuter" x1="50%" y1="4%" x2="55%" y2="100%">
           <Stop offset="0%" stopColor={palette.core} />
-          <Stop offset="36%" stopColor={palette.mid} />
+          <Stop offset="38%" stopColor={palette.mid} />
           <Stop offset="100%" stopColor={palette.outer} />
         </LinearGradient>
-        <LinearGradient id={`inner_${id}`} x1="50%" y1="0%" x2="50%" y2="100%">
-          <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.86" />
-          <Stop offset="100%" stopColor={palette.core} stopOpacity="0.7" />
+        <LinearGradient id="cardInner" x1="50%" y1="0%" x2="50%" y2="100%">
+          <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.88" />
+          <Stop offset="100%" stopColor={palette.core} stopOpacity="0.72" />
         </LinearGradient>
       </Defs>
-      <Ellipse cx="110" cy="150" rx="96" ry="98" fill={`url(#glow_${id})`} />
+      <Ellipse cx="110" cy="150" rx="96" ry="98" fill="url(#cardGlow)" />
       <G transform="translate(110 141)">
         <Path
           d="M0 -112 C-40 -76 -66 -35 -54 16 C-42 70 6 98 52 67 C94 38 100 -10 66 -50 C45 -74 33 -88 37 -111 C25 -94 11 -80 -7 -66 C-16 -91 -6 -107 0 -112 Z"
-          fill={`url(#outer_${id})`}
+          fill="url(#cardOuter)"
         />
         <Path
           d="M4 -67 C-23 -38 -34 -12 -26 22 C-18 58 12 72 38 47 C62 24 51 -6 29 -34 C16 -50 10 -61 14 -78 C10 -74 7 -70 4 -67 Z"
@@ -449,44 +388,21 @@ function FlameSvg({ id, palette }: { id: string; palette: FlamePalette }) {
         />
         <Path
           d="M9 -30 C-8 -11 -13 12 -4 30 C4 49 24 50 35 32 C45 16 32 1 21 -13 C14 -22 11 -29 12 -39 C11 -35 10 -32 9 -30 Z"
-          fill={`url(#inner_${id})`}
+          fill="url(#cardInner)"
         />
       </G>
     </Svg>
   );
 }
 
-function CampfireStreaks({
-  palette,
-  personalStreak,
-  friendStreak,
-}: {
-  palette: FlamePalette;
-  personalStreak: number;
-  friendStreak: number;
-}) {
-  return (
-    <View style={styles.streakCenter}>
-      <View style={[styles.streakCenterPill, { backgroundColor: 'rgba(255,255,255,0.76)', borderColor: palette.border }]}>
-        <Text style={[styles.streakNumber, { color: palette.text }]}>{personalStreak}</Text>
-        <Text style={[styles.streakLabel, { color: palette.muted }]}>You</Text>
-      </View>
-      <View style={[styles.streakCenterPill, { backgroundColor: 'rgba(255,255,255,0.76)', borderColor: palette.border }]}>
-        <Text style={[styles.streakNumber, { color: palette.text }]}>{friendStreak}</Text>
-        <Text style={[styles.streakLabel, { color: palette.muted }]}>Friends</Text>
-      </View>
-    </View>
-  );
-}
-
 function CampfireLogs({ palette }: { palette: FlamePalette }) {
   return (
     <View style={styles.logsLayer}>
-      <Svg width="240" height="96" viewBox="0 0 240 96">
+      <Svg width="230" height="92" viewBox="0 0 240 96">
         <Defs>
           <LinearGradient id="logA" x1="0%" y1="0%" x2="100%" y2="100%">
             <Stop offset="0%" stopColor="#9a6a42" />
-            <Stop offset="56%" stopColor="#6c4328" />
+            <Stop offset="58%" stopColor="#6c4328" />
             <Stop offset="100%" stopColor="#3c2418" />
           </LinearGradient>
           <LinearGradient id="logB" x1="100%" y1="0%" x2="0%" y2="100%">
@@ -495,7 +411,7 @@ function CampfireLogs({ palette }: { palette: FlamePalette }) {
             <Stop offset="100%" stopColor="#3f271a" />
           </LinearGradient>
         </Defs>
-        <Ellipse cx="120" cy="76" rx="92" ry="14" fill={palette.outer} opacity="0.14" />
+        <Ellipse cx="120" cy="76" rx="88" ry="13" fill={palette.outer} opacity="0.14" />
         <G transform="rotate(-13 118 62)">
           <Path d="M44 50 H188 C199 50 208 58 208 68 C208 78 199 86 188 86 H44 C33 86 24 78 24 68 C24 58 33 50 44 50 Z" fill="url(#logA)" />
           <Ellipse cx="44" cy="68" rx="20" ry="18" fill="#c08b5d" />
@@ -512,92 +428,43 @@ function CampfireLogs({ palette }: { palette: FlamePalette }) {
   );
 }
 
-function FloatingBuddyName({ member, index, palette }: { member: BuddyDisplay; index: number; palette: FlamePalette }) {
+function FloatingNameChip({ name, index, color }: { name: string; index: number; color: string }) {
   const drift = React.useRef(new Animated.Value(0)).current;
-  const positions = [
-    { left: '9%', top: 338 },
-    { left: '61%', top: 332 },
-    { left: '15%', top: 500 },
-    { left: '58%', top: 510 },
-    { left: '34%', top: 266 },
-    { left: '35%', top: 612 },
-  ];
-  const position = positions[index % positions.length];
-
   React.useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(drift, {
-          toValue: 1,
-          duration: 2400 + index * 260,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(drift, {
-          toValue: 0,
-          duration: 2400 + index * 260,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
+        Animated.timing(drift, { toValue: 1, duration: 2300 + index * 180, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(drift, { toValue: 0, duration: 2300 + index * 180, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, [drift, index]);
 
-  const animatedStyle = {
-    transform: [
-      {
-        translateY: drift.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -12 - (index % 2) * 5],
-        }),
-      },
-      {
-        translateX: drift.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, index % 2 === 0 ? 8 : -8],
-        }),
-      },
-    ],
-  };
-
   return (
     <Animated.View
       style={[
-        styles.nameFloat,
+        styles.nameChip,
         {
-          left: position.left as any,
-          top: position.top,
-          backgroundColor: 'rgba(255,255,255,0.72)',
-          borderColor: palette.border,
+          borderColor: `${color}33`,
+          transform: [
+            { translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -5] }) },
+          ],
         },
-        animatedStyle,
       ]}
     >
-      <Text style={[styles.nameFloatText, { color: palette.text }]}>{member.name}</Text>
+      <Text style={styles.nameChipText}>{name}</Text>
     </Animated.View>
-  );
-}
-
-function MiniStat({ value, label, color, muted }: { value: string; label: string; color: string; muted: string }) {
-  return (
-    <View style={styles.miniStat}>
-      <Text style={[styles.miniStatValue, { color }]}>{value}</Text>
-      <Text style={[styles.miniStatLabel, { color: muted }]}>{label}</Text>
-    </View>
   );
 }
 
 function getFlamePalette({
   colors,
-  isDark,
   isCritical,
   streakUnlocked,
   effortScore,
 }: {
-  colors: typeof Colors.light | typeof Colors.dark;
-  isDark: boolean;
+  colors: typeof Colors.light;
   isCritical: boolean;
   streakUnlocked: boolean;
   effortScore: number;
@@ -608,56 +475,45 @@ function getFlamePalette({
       mid: '#f97373',
       core: '#ffe4e6',
       glow: '#fca5a5',
-      haze: isDark ? 'rgba(255, 180, 171, 0.16)' : 'rgba(255, 218, 214, 0.82)',
-      focus: isDark ? 'rgba(96, 51, 56, 0.52)' : '#fff0ef',
-      surface: isDark ? '#241318' : '#fff8f8',
-      border: isDark ? '#603338' : '#ffe1df',
-      text: isDark ? '#ffdad6' : '#7f1616',
-      muted: isDark ? '#ffb4ab' : '#a84545',
+      focus: '#fff0ef',
+      border: '#ffe1df',
+      text: '#7f1616',
+      muted: '#a84545',
     };
   }
-
   if (!streakUnlocked) {
     return {
       outer: colors.primaryLight,
       mid: '#c8b8ff',
       core: '#fbf7ff',
       glow: '#d8ccff',
-      haze: isDark ? 'rgba(206, 189, 255, 0.14)' : 'rgba(232, 221, 255, 0.86)',
-      focus: isDark ? 'rgba(62, 52, 86, 0.58)' : '#f4edff',
-      surface: isDark ? colors.surfaceContainer : '#fbf8ff',
-      border: isDark ? colors.outlineVariant : '#f0e8ff',
-      text: colors.textPrimary,
-      muted: colors.textMuted,
+      focus: '#f4edff',
+      border: '#f0e8ff',
+      text: colors.primaryDark,
+      muted: colors.primary,
     };
   }
-
   if (effortScore >= 76) {
     return {
       outer: colors.secondary,
       mid: '#34d399',
       core: '#ecfdf5',
       glow: '#a6f2cf',
-      haze: isDark ? 'rgba(139, 214, 180, 0.18)' : 'rgba(166, 242, 207, 0.72)',
-      focus: isDark ? 'rgba(28, 71, 55, 0.58)' : '#edfff6',
-      surface: isDark ? '#122a22' : '#f6fff9',
-      border: isDark ? '#2e5f4b' : '#d9fbe9',
-      text: isDark ? '#dff8ea' : '#0f513d',
-      muted: isDark ? '#a6f2cf' : '#2f765d',
+      focus: '#edfff6',
+      border: '#d9fbe9',
+      text: '#0f513d',
+      muted: '#2f765d',
     };
   }
-
   return {
     outer: colors.primary,
     mid: colors.primaryLight,
     core: '#f7f1ff',
     glow: '#d8ccff',
-    haze: isDark ? 'rgba(206, 189, 255, 0.16)' : 'rgba(232, 221, 255, 0.82)',
-    focus: isDark ? 'rgba(68, 55, 98, 0.6)' : '#f3edff',
-    surface: isDark ? '#2f2940' : '#fbf8ff',
-    border: isDark ? '#514473' : '#efe8ff',
-    text: isDark ? '#efe8ff' : colors.primaryDark,
-    muted: isDark ? '#cebdff' : colors.primary,
+    focus: '#f3edff',
+    border: '#efe8ff',
+    text: colors.primaryDark,
+    muted: colors.primary,
   };
 }
 
@@ -665,93 +521,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundWash: {
+  pageGlow: {
     position: 'absolute',
-    top: 150,
-    left: 32,
-    right: 32,
-    height: 500,
-    opacity: 0.72,
-    borderRadius: 56,
-  },
-  fireFocusPanel: {
-    position: 'absolute',
-    top: 118,
-    left: Spacing.three,
-    right: Spacing.three,
-    height: 610,
-    borderRadius: 52,
-    borderWidth: 1,
-    shadowColor: '#4f319c',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.12,
-    shadowRadius: 34,
-  },
-  flameLayer: {
-    position: 'absolute',
-  },
-  logsLayer: {
-    position: 'absolute',
-    top: 585,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  streakCenter: {
-    position: 'absolute',
-    top: 374,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Spacing.two,
-  },
-  streakCenterPill: {
-    width: 82,
-    height: 68,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3A3546',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-  },
-  streakNumber: {
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: '900',
-  },
-  streakLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    marginTop: 2,
-  },
-  nameFloat: {
-    position: 'absolute',
-    minHeight: 38,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.three,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.card,
-  },
-  nameFloatText: {
-    fontSize: 13,
-    fontWeight: '900',
+    right: -96,
+    top: 140,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    opacity: 0.28,
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
     gap: Spacing.three,
-    minHeight: 920,
   },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 30,
@@ -764,17 +550,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginTop: 2,
   },
-  streakBadge: {
-    minWidth: 66,
+  statusPill: {
     height: 40,
     borderRadius: Radius.full,
     borderWidth: 1,
+    paddingHorizontal: Spacing.three,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: Spacing.one,
   },
-  streakText: {
+  statusPillText: {
     fontSize: 13,
     fontWeight: '900',
   },
@@ -802,39 +587,156 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  flameSpace: {
-    height: 640,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  miniStat: {
-    flex: 1,
-    minHeight: 72,
-    borderRadius: Radius.lg,
-    backgroundColor: '#ffffff',
+  streakCard: {
+    padding: Spacing.three,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#ECE9EF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.card,
+    borderColor: '#ffffff',
   },
-  miniStatValue: {
-    fontSize: 20,
-    fontWeight: '900',
+  streakCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    zIndex: 3,
   },
-  miniStatLabel: {
-    fontSize: 10,
+  cardEyebrow: {
+    fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
-    marginTop: 4,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  scoreBadge: {
+    minWidth: 62,
+    height: 38,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreBadgeValue: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  fireStage: {
+    height: 338,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -6,
+  },
+  flameLayer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  logsLayer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  streakInsideFlame: {
+    position: 'absolute',
+    top: 132,
+    minWidth: 82,
+    height: 70,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.70)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakInsideNumber: {
+    fontSize: 26,
+    lineHeight: 29,
+    fontWeight: '900',
+  },
+  streakInsideLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   section: {
     gap: Spacing.two,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  sectionMeta: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  leaderboardCard: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  leaderRow: {
+    minHeight: 66,
+    paddingHorizontal: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  rankCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankText: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  leaderNameBlock: {
+    flex: 1,
+  },
+  leaderName: {
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  leaderSub: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  leaderScore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  leaderDays: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  nameWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  nameChip: {
+    minHeight: 38,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.card,
+  },
+  nameChipText: {
+    color: '#1d1a21',
+    fontSize: 13,
     fontWeight: '900',
   },
   requestCard: {

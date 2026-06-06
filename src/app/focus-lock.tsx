@@ -23,6 +23,7 @@ export default function FocusLockScreen() {
     focusLockTimeLeft,
     missions,
     burnoutRisk,
+    recoveryPlan,
     isTimeTampered,
     releaseFocusLock,
     startMission,
@@ -38,6 +39,7 @@ export default function FocusLockScreen() {
     ? appNameByPackage[blockedPackage] ?? blockedPackage
     : routeLabel ?? (restrictedApp || 'that app');
   const causeText = burnoutRisk.causes.length > 0 ? burnoutRisk.causes.slice(0, 2).join(' + ') : 'digital overload';
+  const lockMessage = recoveryPlan?.lockScreenMessage || 'until this app can open again';
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -112,7 +114,7 @@ export default function FocusLockScreen() {
       <Text style={styles.title}>{blockedAppName} is paused</Text>
 
       <Text style={styles.timer}>{formatTime(focusLockTimeLeft)}</Text>
-      <Text style={styles.copy}>until this app can open again</Text>
+      <Text style={styles.copy}>{lockMessage}</Text>
 
       <Pressable style={styles.taskButton} onPress={handleTask}>
         <Ionicons name="leaf-outline" size={20} color="#1F1E24" />

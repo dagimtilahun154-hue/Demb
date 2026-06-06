@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,24 +15,35 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   const isSignUp = mode === 'sign-up';
   const disabled = loading || !email.trim() || !password || (isSignUp && !name.trim());
 
   const submit = async () => {
     if (disabled) return;
-    setLoading(true);
-    const result = isSignUp
-      ? await signUp({ name: name.trim(), email: email.trim(), password })
-      : await signIn({ email: email.trim(), password });
-    setLoading(false);
-
-    if (!result.ok) {
-      Alert.alert(isSignUp ? 'Registration failed' : 'Sign in failed', result.error || 'Check your connection and try again.');
+    if (password.length < 6) {
+      setMessage('Use 6+ characters.');
       return;
     }
+    setLoading(true);
+    setMessage('');
+    try {
+      const result = isSignUp
+        ? await signUp({ name: name.trim(), email: email.trim(), password })
+        : await signIn({ email: email.trim(), password });
 
-    router.replace('/onboarding');
+      if (!result.ok) {
+        setMessage(result.error || 'Try again.');
+        return;
+      }
+
+      router.replace('/onboarding');
+    } catch (error: any) {
+      setMessage(error?.message || 'Try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -49,10 +60,8 @@ export default function AuthScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.title}>{isSignUp ? 'Create your account' : 'Welcome back'}</Text>
-        <Text style={styles.subtitle}>
-          {isSignUp ? 'Registration needs internet once. After that, Demb can open offline from your saved session.' : 'Sign in online, then Demb keeps your session cached.'}
-        </Text>
+        <Text style={styles.title}>{isSignUp ? 'Create account' : 'Welcome back'}</Text>
+        <Text style={styles.subtitle}>{isSignUp ? 'Start your recovery space.' : 'Continue your recovery.'}</Text>
 
         <View style={styles.form}>
           {isSignUp && (
@@ -96,8 +105,9 @@ export default function AuthScreen() {
           </View>
 
           <Pressable disabled={disabled} style={[styles.primaryButton, disabled && styles.disabledButton]} onPress={submit}>
-            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{isSignUp ? 'Sign Up' : 'Log In'}</Text>}
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{isSignUp ? 'Create' : 'Sign in'}</Text>}
           </Pressable>
+          {message ? <Text style={styles.messageText}>{message}</Text> : null}
         </View>
 
         <Pressable
@@ -106,7 +116,7 @@ export default function AuthScreen() {
             setMode(isSignUp ? 'sign-in' : 'sign-up');
           }}
         >
-          <Text style={styles.switchText}>{isSignUp ? 'I already have an account' : 'Create a new account'}</Text>
+          <Text style={styles.switchText}>{isSignUp ? 'I have an account' : 'Create account'}</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -201,6 +211,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '900',
+  },
+  messageText: {
+    color: '#8A2931',
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 2,
   },
   switchButton: {
     height: 54,

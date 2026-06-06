@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, useColorScheme, ScrollView, Pressable, Alert, Animated } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Pressable, Alert, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Radius, Shadows, BottomTabInset } from '@/constants/theme';
@@ -8,10 +8,8 @@ import { useAppStore } from '@/store';
 import NeomorphicCard from '@/components/NeomorphicCard';
 
 export default function ProfileScreen() {
-  const scheme = useColorScheme() ?? 'light';
-  const colors = Colors[scheme];
+  const colors = Colors.light;
   const insets = useSafeAreaInsets();
-  const isDark = scheme === 'dark';
 
   const {
     user,
@@ -91,16 +89,16 @@ export default function ProfileScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Background aurora */}
       <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-        <Animated.View 
+        <Animated.View
           style={[
-            styles.blurBlob, 
-            { 
-              backgroundColor: isDark ? '#3d256d' : '#e8ddff',
-              top: '15%', 
+            styles.blurBlob,
+            {
+              backgroundColor: '#e8ddff',
+              top: '15%',
               right: '-10%',
-              transform: [{ translateX: transX }, { translateY: transY }] 
+              transform: [{ translateX: transX }, { translateY: transY }]
             }
-          ]} 
+          ]}
         />
       </View>
 
@@ -117,7 +115,7 @@ export default function ProfileScreen() {
         {/* Title */}
         <Text style={[styles.title, { color: colors.textPrimary }]}>Officer Profile</Text>
 
-        {/* Profile Card Header with Mascot Celebrate */}
+        {/* Profile Card Header */}
         <NeomorphicCard style={styles.profileHeaderCard} bgColor={colors.surface}>
           <Image
             source={require('../../../assets/images/logo.jpg')}
@@ -132,11 +130,9 @@ export default function ProfileScreen() {
               <Text style={[styles.rankText, { color: colors.primary }]}>{getRank()}</Text>
             </View>
           </View>
-          <Image
-            source={require('../../../assets/images/demb_celebrate.png')}
-            style={styles.mascotCelebrate}
-            contentFit="contain"
-          />
+          <View style={[styles.mascotCelebrate, { justifyContent: 'center', alignItems: 'center' }]}>
+            <Ionicons name="star" size={40} color={colors.primary} />
+          </View>
         </NeomorphicCard>
 
         {/* Stats Row */}
@@ -174,8 +170,8 @@ export default function ProfileScreen() {
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Achievements & Badges</Text>
         <View style={styles.badgeGrid}>
           {badges.map(badge => (
-            <NeomorphicCard 
-              key={badge.title} 
+            <NeomorphicCard
+              key={badge.title}
               style={[
                 styles.badgeTile,
                 !badge.unlocked && { opacity: 0.35 }
@@ -183,10 +179,10 @@ export default function ProfileScreen() {
               bgColor={badge.unlocked ? badge.color + '25' : colors.surface}
             >
               <View style={[styles.badgeIconWrapper, { backgroundColor: badge.unlocked ? badge.color : colors.surfaceContainer }]}>
-                <Ionicons 
-                  name={badge.icon as any} 
-                  size={22} 
-                  color={badge.unlocked ? colors.primary : colors.textMuted} 
+                <Ionicons
+                  name={badge.icon as any}
+                  size={22}
+                  color={badge.unlocked ? colors.primary : colors.textMuted}
                 />
               </View>
               <Text style={[styles.badgeTitleText, { color: colors.textPrimary }]}>{badge.title}</Text>
@@ -212,13 +208,13 @@ export default function ProfileScreen() {
                     }}
                     style={[
                       styles.intensityPill,
-                      { backgroundColor: isDark ? colors.surfaceContainer : '#F5F4F7' },
+                      { backgroundColor: '#F5F4F7' },
                       isSelected && { backgroundColor: colors.primary },
                     ]}
                   >
-                    <Text 
+                    <Text
                       style={[
-                        styles.intensityPillText, 
+                        styles.intensityPillText,
                         { color: isSelected ? '#FFF' : colors.textPrimary }
                       ]}
                     >
@@ -240,9 +236,9 @@ export default function ProfileScreen() {
             { title: 'Privacy Patrol', icon: 'lock-closed-outline', action: () => {} },
             { title: 'Help & Feedback', icon: 'help-circle-outline', action: () => {} },
           ].map((item, index) => (
-            <Pressable 
-              key={item.title} 
-              onPress={item.action} 
+            <Pressable
+              key={item.title}
+              onPress={item.action}
               style={({ pressed }) => [
                 styles.settingsRow,
                 pressed && styles.rowPressed,
@@ -257,9 +253,9 @@ export default function ProfileScreen() {
             </Pressable>
           ))}
 
-          {/* Reset Action */}
-          <Pressable 
-            onPress={handleSignOut} 
+          {/* Sign Out */}
+          <Pressable
+            onPress={handleSignOut}
             style={({ pressed }) => [
               styles.settingsRow,
               { borderTopWidth: 1, borderTopColor: colors.outlineVariant + '30', marginTop: Spacing.one },
@@ -273,8 +269,9 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
 
-          <Pressable 
-            onPress={handleReset} 
+          {/* Reset */}
+          <Pressable
+            onPress={handleReset}
             style={({ pressed }) => [
               styles.settingsRow,
               { borderTopWidth: 1, borderTopColor: colors.outlineVariant + '30', marginTop: Spacing.one },

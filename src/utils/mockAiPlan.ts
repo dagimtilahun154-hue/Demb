@@ -1,8 +1,57 @@
-import type { BurnoutRiskResult, RecoveryPlan, RecoveryTask } from '@/types/burnout';
+import type {
+  BurnoutCause,
+  BurnoutRiskResult,
+  RecoveryPlan,
+  RecoveryTask,
+  RecoveryTaskType,
+  SupportChatAction,
+  SupportChatMessage,
+} from '@/types/burnout';
+import { hasSupabaseConfig, supabase } from './supabase';
 
 const id = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+const aiEngineUrl = (process.env.EXPO_PUBLIC_AI_ENGINE_URL || '').replace(/\/$/, '');
 
-// Heuristic fallback generator when offline
+const taskTypes: RecoveryTaskType[] = [
+  'walking',
+  'breathing',
+  'screen_off',
+  'hydration',
+  'reading',
+  'sound_therapy',
+  'sleep_preparation',
+];
+
+const chatActions: SupportChatAction[] = [
+  'start_focus',
+  'start_recovery_task',
+  'delay_app',
+  'update_intention',
+  'ask_buddy',
+  'mood_checkin',
+];
+
+const clamp = (value: unknown, min: number, max: number, fallback: number) => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+};
+
+const normalizeTask = (task: any, fallback: RecoveryTask): RecoveryTask => {
+  const type = taskTypes.includes(task?.type) ? task.type : fallback.type;
+  return {
+    id: typeof task?.id === 'string' ? task.id : id('task'),
+    type,
+    title: typeof task?.title === 'string' && task.title.trim() ? task.title.trim().slice(0, 48) : fallback.title,
+    target: typeof task?.target === 'string' && task.target.trim() ? task.target.trim().slice(0, 120) : fallback.target,
+    durationMinutes: clamp(task?.durationMinutes, 1, 90, fallback.durationMinutes),
+    verification: ['timer', 'pedometer', 'screen_off', 'manual'].includes(task?.verification) ? task.verification : fallback.verification,
+    rewardPoints: clamp(task?.rewardPoints, 5, 60, fallback.rewardPoints),
+    recoveryValue: clamp(task?.recoveryValue, 5, 60, fallback.recoveryValue),
+  };
+};
+
+// Heuristic fallback generator when offline or when AI output is invalid.
 export function generateLocalRecoveryPlan({
   userId,
   risk,
@@ -14,7 +63,7 @@ export function generateLocalRecoveryPlan({
     id: id('task_walk'),
     type: 'walking',
     title: 'Gentle Walk',
-    target: '10 minutes of walking',
+    target: 'Walk outside or around the room for 10 minutes.',
     durationMinutes: 10,
     verification: 'pedometer',
     rewardPoints: 25,
@@ -24,8 +73,8 @@ export function generateLocalRecoveryPlan({
   const readingTask: RecoveryTask = {
     id: id('task_read'),
     type: 'reading',
-    title: 'Book Reading Time',
-    target: '15 minutes of offline reading',
+    title: 'Offline Reading',
+    target: 'Read something offline for 15 minutes.',
     durationMinutes: 15,
     verification: 'timer',
     rewardPoints: 20,
@@ -35,8 +84,8 @@ export function generateLocalRecoveryPlan({
   const screenOffTask: RecoveryTask = {
     id: id('task_screen_off'),
     type: 'screen_off',
-    title: 'Off-Screen Detox',
-    target: '30 minutes offline screen off',
+    title: 'Screen-Off Reset',
+    target: 'Put the phone away for 30 minutes.',
     durationMinutes: 30,
     verification: 'screen_off',
     rewardPoints: 35,
@@ -46,8 +95,8 @@ export function generateLocalRecoveryPlan({
   const breathingTask: RecoveryTask = {
     id: id('task_breathe'),
     type: 'breathing',
-    title: 'Calm Breathing Gap',
-    target: '5 minutes mindful breathing',
+    title: 'Breathing Gap',
+    target: 'Breathe slowly for 5 minutes before reopening anything.',
     durationMinutes: 5,
     verification: 'timer',
     rewardPoints: 15,
@@ -70,162 +119,229 @@ export function generateLocalRecoveryPlan({
         appCategory: 'social_media',
         appName: 'Social Apps',
         allowedMinutes: 40,
-        windowMinutes: 120, // 40 minutes per 2 hours
+        windowMinutes: 120,
         recoveryRequiredAfterLimit: true,
       },
     ],
     recoveryTasks: tasks,
     schedule: [
-      { label: 'Morning focus preparation', timeWindow: '08:00 - 10:00', taskId: tasks[0].id },
-      { label: 'Afternoon mental recharge', timeWindow: '14:00 - 16:00', taskId: tasks[1].id },
+      { label: 'Morning focus', timeWindow: '08:00 - 10:00', taskId: tasks[0].id },
+      { label: 'Afternoon reset', timeWindow: '14:00 - 16:00', taskId: tasks[1].id },
       { label: 'Evening wind-down', timeWindow: '20:00 - 21:00', taskId: tasks[2].id },
     ],
-    buddyActions: [
-      'Share your recovery tree growth with your buddies.',
-      'Cheer them on if they trigger a focus lock.',
-    ],
-    explanation: 'Created locally (Offline Mode). This plan tracks offline screen-off, walking, and reading intervals to lower dopamine load.',
+    buddyActions: ['Ask one buddy for a check-in.', 'Send a cheer after a recovery task.'],
+    explanation: 'Created locally from your usage and recovery signals. It keeps social use bounded while giving your nervous system short recovery exits.',
     active: true,
+    lockScreenMessage: 'Pause here. One small reset first.',
+    supportPrompts: [
+      'What are you trying to feel by opening this app?',
+      'Name the next small recovery action.',
+      'Do you want a focus window or a softer reset?',
+    ],
+    dailyCheckInTime: '20:00',
+    emotionalSupportTone: 'calm, brief, practical',
+    aiActions: ['start_focus', 'start_recovery_task', 'delay_app', 'mood_checkin'],
   };
 }
 
-/**
- * Generates an adaptive recovery plan using Gemini API.
- * Uses a structured JSON response schema to ensure safe parsing.
- */
+export function validateRecoveryPlan(input: any, userId: string, risk: BurnoutRiskResult): RecoveryPlan {
+  const fallback = generateLocalRecoveryPlan({ userId, risk });
+  const rawTasks = Array.isArray(input?.recoveryTasks) ? input.recoveryTasks : [];
+  const recoveryTasks = rawTasks.length > 0
+    ? rawTasks.slice(0, 5).map((task: any, index: number) => normalizeTask(task, fallback.recoveryTasks[index] ?? fallback.recoveryTasks[0]))
+    : fallback.recoveryTasks;
+
+  return {
+    planId: typeof input?.planId === 'string' ? input.planId : id('plan'),
+    userId,
+    generatedAt: new Date().toISOString(),
+    riskLevel: risk.status,
+    primaryCauses: Array.isArray(input?.primaryCauses)
+      ? input.primaryCauses.filter((cause: BurnoutCause) => risk.causes.includes(cause)).slice(0, 4)
+      : fallback.primaryCauses,
+    digitalRules: Array.isArray(input?.digitalRules) && input.digitalRules.length > 0
+      ? input.digitalRules.slice(0, 4).map((rule: any) => ({
+          id: typeof rule?.id === 'string' ? rule.id : id('rule'),
+          appCategory: typeof rule?.appCategory === 'string' ? rule.appCategory : 'social_media',
+          appName: typeof rule?.appName === 'string' ? rule.appName : 'Social Apps',
+          allowedMinutes: clamp(rule?.allowedMinutes, 5, 120, 40),
+          windowMinutes: clamp(rule?.windowMinutes, 30, 360, 120),
+          recoveryRequiredAfterLimit: Boolean(rule?.recoveryRequiredAfterLimit ?? true),
+        }))
+      : fallback.digitalRules,
+    recoveryTasks,
+    schedule: Array.isArray(input?.schedule) && input.schedule.length > 0
+      ? input.schedule.slice(0, 5).map((slot: any, index: number) => ({
+          label: typeof slot?.label === 'string' ? slot.label.slice(0, 48) : fallback.schedule[index]?.label ?? 'Recovery window',
+          timeWindow: typeof slot?.timeWindow === 'string' ? slot.timeWindow.slice(0, 32) : fallback.schedule[index]?.timeWindow ?? '20:00 - 21:00',
+          taskId: recoveryTasks.find((task: RecoveryTask) => task.id === slot?.taskId)?.id ?? recoveryTasks[index % recoveryTasks.length]?.id,
+        }))
+      : fallback.schedule,
+    buddyActions: Array.isArray(input?.buddyActions) && input.buddyActions.length > 0
+      ? input.buddyActions.filter((item: unknown) => typeof item === 'string').slice(0, 3)
+      : fallback.buddyActions,
+    explanation: typeof input?.explanation === 'string' && input.explanation.trim()
+      ? input.explanation.trim().slice(0, 280)
+      : fallback.explanation,
+    active: true,
+    lockScreenMessage: typeof input?.lockScreenMessage === 'string' ? input.lockScreenMessage.slice(0, 90) : fallback.lockScreenMessage,
+    supportPrompts: Array.isArray(input?.supportPrompts)
+      ? input.supportPrompts.filter((item: unknown) => typeof item === 'string').slice(0, 5)
+      : fallback.supportPrompts,
+    dailyCheckInTime: typeof input?.dailyCheckInTime === 'string' ? input.dailyCheckInTime.slice(0, 5) : fallback.dailyCheckInTime,
+    emotionalSupportTone: typeof input?.emotionalSupportTone === 'string' ? input.emotionalSupportTone.slice(0, 80) : fallback.emotionalSupportTone,
+    aiActions: Array.isArray(input?.aiActions)
+      ? input.aiActions.filter((action: SupportChatAction) => chatActions.includes(action)).slice(0, 6)
+      : fallback.aiActions,
+  };
+}
+
 export async function generateAiRecoveryPlan({
   userId,
   risk,
   userProfile,
   latestBiometrics,
+  observationSummary,
 }: {
   userId: string;
   risk: BurnoutRiskResult;
   userProfile: any;
   latestBiometrics: any;
+  observationSummary: any;
 }): Promise<RecoveryPlan> {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (aiEngineUrl) {
+    try {
+      const response = await fetch(`${aiEngineUrl}/recovery-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          risk,
+          userProfile,
+          latestBiometrics,
+          observationSummary,
+        }),
+      });
 
-  if (!apiKey) {
-    console.warn('[AI Plan] No EXPO_PUBLIC_GEMINI_API_KEY found, falling back to local engine');
+      if (response.ok) {
+        const data = await response.json();
+        return validateRecoveryPlan(data?.plan ?? data, userId, risk);
+      }
+      console.log('[AI Plan] Hugging Face AI engine failed:', response.status);
+    } catch (error) {
+      console.log('[AI Plan] Hugging Face AI engine unreachable:', error);
+    }
+  }
+
+  if (!hasSupabaseConfig || !supabase) {
     return generateLocalRecoveryPlan({ userId, risk });
   }
 
-  const prompt = `
-    You are the Demb Digital Wellness AI Engine.
-    Analyze the user's digital burnout data and compile a highly customized, actionable recovery plan.
-    
-    User Profile:
-    - Name: ${userProfile.name}
-    - Recovery Intensity Choice: ${userProfile.recoveryIntensity}
-    - Major Problem: ${userProfile.biggestProblem}
-    - Daily Goal: ${userProfile.dailyGoal}
+  const { data, error } = await supabase.functions.invoke('groq-recovery-plan', {
+    body: {
+      userId,
+      risk,
+      userProfile,
+      latestBiometrics,
+      observationSummary,
+    },
+  });
 
-    Current Burnout Risk:
-    - Score: ${risk.burnoutRiskScore}/100
-    - Status: ${risk.status}
-    - Identified Causes: ${risk.causes.join(', ')}
+  if (error) {
+    console.log('[AI Plan] Supabase Groq function failed, falling back locally:', error.message);
+    return generateLocalRecoveryPlan({ userId, risk });
+  }
 
-    Latest Biometrics:
-    - Steps today: ${latestBiometrics.steps}
-    - Average Heart Rate: ${latestBiometrics.averageHeartRate} bpm
-    - Heart Rate Variability (HRV): ${latestBiometrics.hrv} ms (if watch available)
-    - Sleep Hours: ${latestBiometrics.sleepHours} hrs (estimated or watch)
-    - Biometrics Source: ${latestBiometrics.dataSource}
+  return validateRecoveryPlan(data?.plan ?? data, userId, risk);
+}
 
-    Generate a JSON object matching this TypeScript structure:
-    {
-      "explanation": "Brief, supportive 2-sentence summary explaining why this plan was tailored based on their data.",
-      "digitalRules": [
-        {
-          "id": "rule_social_limit",
-          "appCategory": "social_media",
-          "appName": "Instagram/TikTok/Socials",
-          "allowedMinutes": 40, 
-          "windowMinutes": 120, // Must include a rolling rate limit rule (e.g. 40 minutes per 2 hours)
-          "recoveryRequiredAfterLimit": true
+export async function generateSupportReply({
+  text,
+  messages,
+  recoveryPlan,
+  risk,
+  observationSummary,
+}: {
+  text: string;
+  messages: SupportChatMessage[];
+  recoveryPlan: RecoveryPlan | null;
+  risk: BurnoutRiskResult;
+  observationSummary: any;
+}): Promise<{ text: string; suggestedAction?: SupportChatAction; source: 'groq' | 'local' }> {
+  if (aiEngineUrl) {
+    try {
+      const response = await fetch(`${aiEngineUrl}/support-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          recentMessages: messages.slice(0, 10).map(message => ({
+            role: message.role,
+            text: message.text,
+            createdAt: message.createdAt,
+          })),
+          recoveryPlan,
+          risk,
+          observationSummary,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (typeof data?.reply === 'string') {
+          return {
+            text: data.reply.slice(0, 600),
+            suggestedAction: chatActions.includes(data?.suggestedAction) ? data.suggestedAction : undefined,
+            source: 'groq',
+          };
         }
-      ],
-      "recoveryTasks": [
-        {
-          "id": "task_1",
-          "type": "walking" | "breathing" | "screen_off" | "reading" | "sound_therapy",
-          "title": "Short title (e.g. 10m Nature Walk, 30m Offline Book)",
-          "target": "Actionable instructions (e.g. Walk 200 steps, turn phone off for 30 minutes, read a physical book)",
-          "durationMinutes": number,
-          "verification": "pedometer" | "timer" | "screen_off" | "manual",
-          "rewardPoints": number (10 to 50),
-          "recoveryValue": number (10 to 50)
-        }
-      ],
-      "schedule": [
-        {
-          "label": "e.g., Morning Focus, Evening wind-down",
-          "timeWindow": "e.g., 09:00 - 10:00",
-          "taskId": "Must match one of the task IDs generated above"
-        }
-      ],
-      "buddyActions": [
-        "2 simple buddy tasks to help coordinate group recovery"
-      ]
+      } else {
+        console.log('[AI Chat] Hugging Face AI engine failed:', response.status);
+      }
+    } catch (error) {
+      console.log('[AI Chat] Hugging Face AI engine unreachable:', error);
     }
-  `;
+  }
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+  if (hasSupabaseConfig && supabase) {
+    const { data, error } = await supabase.functions.invoke('groq-support-chat', {
+      body: {
+        text,
+        recentMessages: messages.slice(0, 10).map(message => ({
+          role: message.role,
+          text: message.text,
+          createdAt: message.createdAt,
+        })),
+        recoveryPlan,
+        risk,
+        observationSummary,
       },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-        },
-      }),
     });
 
-    if (!response.ok) {
-      throw new Error(`API returned status ${response.status}`);
+    if (!error && typeof data?.reply === 'string') {
+      return {
+        text: data.reply.slice(0, 600),
+        suggestedAction: chatActions.includes(data?.suggestedAction) ? data.suggestedAction : undefined,
+        source: 'groq',
+      };
     }
-
-    const resJson = await response.json();
-    const responseText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!responseText) {
-      throw new Error('Empty text response from Gemini');
-    }
-
-    const aiPlan = JSON.parse(responseText);
-    const recoveryTasks = (aiPlan.recoveryTasks || []).map((task: any) => ({
-      ...task,
-      id: id('task'),
-    }));
-
-    // Hydrate IDs and return complete RecoveryPlan type
-    return {
-      planId: id('plan'),
-      userId,
-      generatedAt: new Date().toISOString(),
-      riskLevel: risk.status,
-      primaryCauses: risk.causes,
-      digitalRules: (aiPlan.digitalRules || []).map((r: any) => ({ ...r, id: id('rule') })),
-      recoveryTasks,
-      schedule: (aiPlan.schedule || []).map((s: any, idx: number) => ({
-        ...s,
-        taskId: recoveryTasks[idx]?.id,
-      })),
-      buddyActions: aiPlan.buddyActions || [
-        'Coordinate a shared offline break window today.',
-        'Encourage your buddies to complete their walks.',
-      ],
-      explanation: aiPlan.explanation || 'Personalized wellness plan prepared by Gemini AI.',
-      active: true,
-    };
-  } catch (error) {
-    console.error('[AI Plan] Failed to query Gemini API, falling back to local rules:', error);
-    return generateLocalRecoveryPlan({ userId, risk });
   }
+
+  const lower = text.toLowerCase();
+  if (lower.includes('scroll') || lower.includes('tiktok') || lower.includes('instagram')) {
+    return {
+      text: 'That urge makes sense. Your mind is reaching for quick relief, not trying to ruin your focus. What feeling is underneath it right now?',
+      source: 'local',
+    };
+  }
+  if (lower.includes('tired') || lower.includes('drained') || lower.includes('burn')) {
+    return {
+      text: 'That sounds genuinely heavy. I am here with you in it. Is it more exhaustion, pressure, or feeling emotionally overloaded?',
+      source: 'local',
+    };
+  }
+  return {
+    text: 'I hear you. This is a private space, and chats expire after 24 hours. What do you wish someone understood about this moment?',
+    source: 'local',
+  };
 }

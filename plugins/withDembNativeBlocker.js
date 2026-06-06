@@ -29,7 +29,6 @@ import android.net.Uri
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule

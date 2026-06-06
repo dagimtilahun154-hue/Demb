@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAppStore } from '@/store';
 import { Colors } from '@/constants/theme';
 import * as SplashScreen from 'expo-splash-screen';
@@ -23,6 +23,14 @@ export default function RootLayout() {
   const loadSavedState = useAppStore(state => state.loadSavedState);
   const hydrateAuthSession = useAppStore(state => state.hydrateAuthSession);
   const checkSystemLocks = useAppStore(state => state.checkSystemLocks);
+  const feelingPromptState = useAppStore(state => state.feelingPromptState);
+  const evaluateFeelingPrompt = useAppStore(state => state.evaluateFeelingPrompt);
+  const dismissFeelingPrompt = useAppStore(state => state.dismissFeelingPrompt);
+  const submitFeelingPrompt = useAppStore(state => state.submitFeelingPrompt);
+  const [promptMood, setPromptMood] = useState(5);
+  const [promptStress, setPromptStress] = useState(5);
+  const [promptUrge, setPromptUrge] = useState(5);
+  const [promptNote, setPromptNote] = useState('');
 
   // Initialize store and check onboarding state
   useEffect(() => {
@@ -46,9 +54,10 @@ export default function RootLayout() {
     checkSystemLocks();
     const interval = setInterval(() => {
       checkSystemLocks();
+      evaluateFeelingPrompt('daily');
     }, 10000);
     return () => clearInterval(interval);
-  }, [isReady]);
+  }, [isReady, checkSystemLocks, evaluateFeelingPrompt]);
 
   // Handle routing logic based on auth/onboarding & focus lock state
   useEffect(() => {
@@ -103,6 +112,45 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="dark" />
+      <Modal visible={feelingPromptState.visible} transparent animationType="fade">
+        <View style={styles.promptBackdrop}>
+          <View style={[styles.promptCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.promptEyebrow, { color: colors.secondary }]}>
+              {feelingPromptState.reason === 'high_usage' ? 'Screen load rising' : 'Daily check-in'}
+            </Text>
+            <Text style={[styles.promptTitle, { color: colors.textPrimary }]}>How are you feeling?</Text>
+            <PromptScale label="Mood" value={promptMood} setValue={setPromptMood} />
+            <PromptScale label="Stress" value={promptStress} setValue={setPromptStress} />
+            <PromptScale label="Urge" value={promptUrge} setValue={setPromptUrge} />
+            <TextInput
+              value={promptNote}
+              onChangeText={setPromptNote}
+              placeholder="Optional note"
+              placeholderTextColor={colors.textMuted}
+              style={[styles.promptInput, { color: colors.textPrimary, backgroundColor: colors.surfaceContainer }]}
+            />
+            <View style={styles.promptActions}>
+              <Pressable style={[styles.promptButton, styles.promptGhost]} onPress={dismissFeelingPrompt}>
+                <Text style={[styles.promptGhostText, { color: colors.textSecondary }]}>Later</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.promptButton, { backgroundColor: colors.primary }]}
+                onPress={() => {
+                  submitFeelingPrompt({
+                    moodScore: promptMood,
+                    stressScore: promptStress,
+                    urgeLevel: promptUrge,
+                    note: promptNote,
+                  });
+                  setPromptNote('');
+                }}
+              >
+                <Text style={[styles.promptSubmitText, { color: colors.onPrimary }]}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
@@ -120,3 +168,120 @@ export default function RootLayout() {
     </>
   );
 }
+
+function PromptScale({
+  label,
+  value,
+  setValue,
+}: {
+  label: string;
+  value: number;
+  setValue: (value: number) => void;
+}) {
+  return (
+    <View style={styles.scaleBlock}>
+      <View style={styles.scaleHeader}>
+        <Text style={styles.scaleLabel}>{label}</Text>
+        <Text style={styles.scaleValue}>{value}/10</Text>
+      </View>
+      <View style={styles.scaleRow}>
+        {[1, 2, 3, 4, 5].map((step) => {
+          const score = step * 2;
+          const selected = value === score;
+          return (
+            <Pressable
+              key={score}
+              onPress={() => setValue(score)}
+              style={[styles.scaleDot, selected && styles.scaleDotSelected]}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  promptBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(29, 26, 33, 0.38)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  promptCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 28,
+    padding: 24,
+    gap: 14,
+  },
+  promptEyebrow: {
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  promptTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  scaleBlock: {
+    gap: 8,
+  },
+  scaleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  scaleLabel: {
+    color: '#494552',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  scaleValue: {
+    color: '#674bb5',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  scaleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  scaleDot: {
+    flex: 1,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ece6f0',
+  },
+  scaleDotSelected: {
+    backgroundColor: '#674bb5',
+  },
+  promptInput: {
+    minHeight: 48,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  promptActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  promptButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promptGhost: {
+    backgroundColor: '#f2ecf6',
+  },
+  promptGhostText: {
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  promptSubmitText: {
+    fontSize: 15,
+    fontWeight: '900',
+  },
+});

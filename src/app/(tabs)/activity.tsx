@@ -1,417 +1,162 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, useColorScheme, Pressable, FlatList, Modal, TextInput, ScrollView, Alert, Animated } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing, Radius, Shadows, BottomTabInset } from '@/constants/theme';
+import React, { useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppStore } from '@/store';
-import NeomorphicCard from '@/components/NeomorphicCard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedPressable from '@/components/AnimatedPressable';
+import { BottomTabInset, Colors, Radius, Shadows, Spacing } from '@/constants/theme';
+import { useAppStore } from '@/store';
+import type { SupportChatMessage } from '@/types/burnout';
 
-export default function ActivityLogScreen() {
-  const scheme = useColorScheme() ?? 'light';
-  const colors = Colors[scheme];
+const quickActions = [
+  { key: 'drained', label: 'Drained', icon: 'battery-dead-outline' },
+  { key: 'urge', label: 'Urge', icon: 'phone-portrait-outline' },
+  { key: 'recovered', label: 'Recovered', icon: 'leaf-outline' },
+] as const;
+
+export default function SupportChatScreen() {
+  const colors = Colors.light;
   const insets = useSafeAreaInsets();
-  const isDark = scheme === 'dark';
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
 
   const {
-    energyLogs,
-    addEnergyLog,
-    deleteEnergyLog,
-    priorities,
-    setPriorities,
+    supportChatMessages,
+    burnoutRisk,
+    recoveryPlan,
+    quickSupportCheckIn,
+    sendSupportMessage,
   } = useAppStore();
 
-  const [activeTab, setActiveTab] = useState<'spent' | 'recovered'>('spent');
-  const [modalVisible, setModalVisible] = useState(false);
-  const [priorityModalVisible, setPriorityModalVisible] = useState(false);
+  React.useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 420,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
 
-  // Activity Log Form State
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('Social Media');
-  const [duration, setDuration] = useState('');
-  const [intensity, setIntensity] = useState<'Low' | 'Medium' | 'High'>('Medium');
-  const [notes, setNotes] = useState('');
-
-  // Priority Form State
-  const [mainTask, setMainTask] = useState(priorities?.mainTask || '');
-  const [healthGoal, setHealthGoal] = useState(priorities?.healthGoal || '');
-  const [recoveryGoal, setRecoveryGoal] = useState(priorities?.recoveryGoal || '');
-
-  const filteredLogs = energyLogs.filter(log => log.type === activeTab);
-
-  // Moving background blobs
-  const bounceAnim = React.useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounceAnim, {
-          toValue: 1,
-          duration: 9500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bounceAnim, {
-          toValue: 0,
-          duration: 9500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-
-  const transX = bounceAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-25, 25],
-  });
-  const transY = bounceAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-15, 15],
-  });
-
-  const handleAddLog = () => {
-    if (!title || !duration) {
-      Alert.alert('Missing Details', 'Please fill in Title and Duration.');
-      return;
+  const messages = useMemo(() => {
+    if (supportChatMessages.length > 0) {
+      return supportChatMessages;
     }
+    const welcome: SupportChatMessage = {
+      id: 'support_welcome',
+      role: 'assistant',
+      text: recoveryPlan?.supportPrompts?.[0] ?? 'You can say it here. I will listen first and help you make sense of what feels heavy.',
+      createdAt: new Date().toISOString(),
+      synced: true,
+      source: 'local',
+    };
+    return [welcome];
+  }, [supportChatMessages, recoveryPlan?.supportPrompts]);
 
-    addEnergyLog({
-      type: activeTab,
-      category,
-      title,
-      durationMinutes: parseInt(duration) || 10,
-      intensity,
-      notes,
-    });
-
-    // Reset Form
-    setTitle('');
-    setDuration('');
-    setNotes('');
-    setModalVisible(false);
-  };
-
-  const handleSavePriorities = () => {
-    if (!mainTask || !healthGoal || !recoveryGoal) {
-      Alert.alert('Missing Details', 'Please fill in all three priorities.');
-      return;
-    }
-
-    setPriorities({
-      mainTask,
-      healthGoal,
-      recoveryGoal,
-    });
-    setPriorityModalVisible(false);
+  const handleSend = async () => {
+    if (!draft.trim() || sending) return;
+    const text = draft;
+    setDraft('');
+    setSending(true);
+    await sendSupportMessage(text);
+    setSending(false);
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Background aurora */}
+    <KeyboardAvoidingView
+      behavior={Platform.select({ ios: 'padding', default: undefined })}
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-        <Animated.View 
-          style={[
-            styles.blurBlob, 
-            { 
-              backgroundColor: isDark ? '#1a4f3b' : '#a6f2cf',
-              top: '25%', 
-              right: '-10%',
-              transform: [{ translateX: transX }, { translateY: transY }] 
-            }
-          ]} 
-        />
+        <View style={[styles.orb, styles.orbTop, { backgroundColor: colors.secondaryLight }]} />
+        <View style={[styles.orb, styles.orbBottom, { backgroundColor: colors.primaryContainer }]} />
       </View>
 
-      <View style={[styles.contentContainer, { paddingTop: insets.top + Spacing.two }]}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Manual Log</Text>
-        <Text style={[styles.subtitle, { color: colors.textMuted }]}>For missed signals.</Text>
-
-        {/* Priorities Header Card */}
-        <NeomorphicCard 
-          onPress={() => {
-            setMainTask(priorities?.mainTask || '');
-            setHealthGoal(priorities?.healthGoal || '');
-            setRecoveryGoal(priorities?.recoveryGoal || '');
-            setPriorityModalVisible(true);
-          }}
-          style={styles.priorityCard}
-        >
-          <View style={styles.priorityCardHeader}>
-            <Text style={[styles.priorityCardLabel, { color: colors.primary }]}>PRIORITIES</Text>
-            <Ionicons name="create-outline" size={16} color={colors.primary} />
+      <Animated.View style={[styles.content, { opacity: fadeAnim, paddingTop: insets.top + Spacing.three }]}>
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.eyebrow, { color: colors.secondary }]}>Support</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Talk it through</Text>
+            <Text style={[styles.privacyLine, { color: colors.textMuted }]}>Private space. Chats expire after 24h.</Text>
           </View>
-          <Text style={[styles.priorityCardTitle, { color: colors.textPrimary }]}>
-            {priorities ? 'Tap to edit' : 'Set today'}
-          </Text>
-        </NeomorphicCard>
-
-        {/* Tab Selector */}
-        <View style={[styles.tabContainer, { backgroundColor: colors.surfaceContainer }]}>
-          <Pressable
-            onPress={() => setActiveTab('spent')}
-            style={[
-              styles.tabButton,
-              activeTab === 'spent' && { backgroundColor: colors.primary },
-            ]}
-          >
-            <Text style={[styles.tabText, { color: activeTab === 'spent' ? colors.onPrimary : colors.textSecondary }]}>
-              Spent
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setActiveTab('recovered')}
-            style={[
-              styles.tabButton,
-              activeTab === 'recovered' && { backgroundColor: colors.primary },
-            ]}
-          >
-            <Text style={[styles.tabText, { color: activeTab === 'recovered' ? colors.onPrimary : colors.textSecondary }]}>
-              Restored
-            </Text>
-          </Pressable>
+          <View style={[styles.riskPill, { backgroundColor: colors.surface, borderColor: colors.outlineVariant + '55' }]}>
+            <Ionicons name="pulse-outline" size={16} color={colors.primary} />
+            <Text style={[styles.riskText, { color: colors.textSecondary }]}>{burnoutRisk.status}</Text>
+          </View>
         </View>
 
-        {/* Logs List */}
-        <FlatList
-          data={filteredLogs}
-          keyExtractor={item => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: BottomTabInset + Spacing.six }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="receipt-outline" size={44} color={colors.textMuted} />
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No entries.</Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <NeomorphicCard style={styles.logCard}>
-              <View style={styles.logLeft}>
-                <View 
-                  style={[
-                    styles.logIndicator, 
-                    { backgroundColor: activeTab === 'spent' ? colors.tertiaryLight : colors.secondaryLight }
-                  ]} 
-                />
-                <View style={styles.logTextContainer}>
-                  <Text style={[styles.logTitleText, { color: colors.textPrimary }]}>{item.title}</Text>
-                  <Text style={[styles.logMeta, { color: colors.textMuted }]}>
-                    {item.category} • {item.durationMinutes} mins • {item.intensity}
-                  </Text>
-                </View>
-              </View>
+        <View style={styles.quickRow}>
+          {quickActions.map((item) => (
+            <AnimatedPressable
+              key={item.key}
+              onPress={() => quickSupportCheckIn(item.key)}
+              style={[styles.quickChip, { backgroundColor: colors.surface, borderColor: colors.outlineVariant + '40' }]}
+            >
+              <Ionicons name={item.icon} size={17} color={colors.primary} />
+              <Text style={[styles.quickText, { color: colors.textPrimary }]}>{item.label}</Text>
+            </AnimatedPressable>
+          ))}
+        </View>
 
-              <View style={styles.logRight}>
-                <Text 
+        <FlatList
+          data={messages}
+          inverted
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.messagesContent}
+          renderItem={({ item }) => {
+            const isUser = item.role === 'user';
+            return (
+              <View style={[styles.messageWrap, isUser ? styles.messageUserWrap : styles.messageAssistantWrap]}>
+                <View
                   style={[
-                    styles.scoreChange, 
-                    { color: activeTab === 'spent' ? colors.error : colors.success }
+                    styles.messageBubble,
+                    {
+                      backgroundColor: isUser ? colors.primary : colors.surface,
+                      borderColor: isUser ? colors.primary : colors.outlineVariant + '45',
+                    },
+                    !isUser && Shadows.card,
                   ]}
                 >
-                  {activeTab === 'spent' ? '-' : '+'}{item.scoreValue}
-                </Text>
-                <Pressable onPress={() => deleteEnergyLog(item.id)} style={styles.deleteButton}>
-                  <Ionicons name="trash-outline" size={16} color={colors.error} />
-                </Pressable>
+                  <Text style={[styles.messageText, { color: isUser ? colors.onPrimary : colors.textPrimary }]}>
+                    {item.text}
+                  </Text>
+                </View>
               </View>
-            </NeomorphicCard>
-          )}
+            );
+          }}
         />
 
-        {/* Floating Action Button */}
-        <AnimatedPressable
-          lifted
-          onPress={() => {
-            setCategory(activeTab === 'spent' ? 'Social Media' : 'Sleep');
-            setModalVisible(true);
-          }}
-          style={[
-            styles.fab,
-            { backgroundColor: colors.primary },
-          ]}
-        >
-          <Ionicons name="add" size={28} color="#fff" />
-        </AnimatedPressable>
-
-        {/* Activity Logging Modal */}
-        <Modal visible={modalVisible} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                    Add {activeTab === 'spent' ? 'Spent' : 'Restored'}
-                  </Text>
-                  <Pressable onPress={() => setModalVisible(false)} style={styles.closeButton}>
-                    <Ionicons name="close" size={24} color={colors.textPrimary} />
-                  </Pressable>
-                </View>
-
-                {/* Title Form */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Title</Text>
-                  <TextInput
-                    style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    placeholder="e.g. Instagram or walk"
-                    placeholderTextColor={colors.textMuted}
-                    value={title}
-                    onChangeText={setTitle}
-                  />
-                </View>
-
-                {/* Category Picker */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Category</Text>
-                  <View style={styles.pillsRow}>
-                    {(activeTab === 'spent'
-                      ? ['Social Media', 'Work', 'Study', 'Gaming', 'Meetings', 'Stress']
-                      : ['Sleep', 'Walking', 'Exercise', 'Meditation', 'Prayer', 'Hobbies']
-                    ).map(cat => {
-                      const isSelected = category === cat;
-                      return (
-                        <Pressable
-                          key={cat}
-                          onPress={() => setCategory(cat)}
-                          style={[
-                            styles.categoryPill,
-                            { borderColor: colors.outlineVariant + '30', backgroundColor: isSelected ? colors.primary : (isDark ? colors.surface : '#ffffff') },
-                          ]}
-                        >
-                          <Text style={[styles.categoryPillText, { color: isSelected ? colors.onPrimary : colors.textPrimary, fontWeight: isSelected ? '700' : '500' }]}>
-                            {cat}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                {/* Duration Form */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Duration (minutes)</Text>
-                  <TextInput
-                    style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    keyboardType="number-pad"
-                    placeholder="e.g. 15"
-                    placeholderTextColor={colors.textMuted}
-                    value={duration}
-                    onChangeText={setDuration}
-                  />
-                </View>
-
-                {/* Intensity Picker */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Intensity / Impact</Text>
-                  <View style={[styles.tabContainer, { backgroundColor: colors.surfaceContainer, marginBottom: 0 }]}>
-                    {['Low', 'Medium', 'High'].map((lvl: any) => {
-                      const isSelected = intensity === lvl;
-                      return (
-                        <Pressable
-                          key={lvl}
-                          onPress={() => setIntensity(lvl)}
-                          style={[
-                            styles.tabButton,
-                            isSelected && { backgroundColor: colors.primary },
-                          ]}
-                        >
-                          <Text style={[styles.tabText, { color: isSelected ? colors.onPrimary : colors.textSecondary }]}>
-                            {lvl}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                {/* Notes */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Notes (optional)</Text>
-                  <TextInput
-                    style={[styles.modalInput, { height: 80, paddingVertical: 12, backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    multiline
-                    placeholder="Optional"
-                    placeholderTextColor={colors.textMuted}
-                    value={notes}
-                    onChangeText={setNotes}
-                  />
-                </View>
-
-                <NeomorphicCard
-                  onPress={handleAddLog}
-                  style={styles.submitButton}
-                  bgColor={colors.primary}
-                >
-                  <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>Save Entry</Text>
-                </NeomorphicCard>
-
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Priorities Editing Modal */}
-        <Modal visible={priorityModalVisible} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Priorities</Text>
-                  <Pressable onPress={() => setPriorityModalVisible(false)} style={styles.closeButton}>
-                    <Ionicons name="close" size={24} color={colors.textPrimary} />
-                  </Pressable>
-                </View>
-
-                {/* Main Task */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Main</Text>
-                  <TextInput
-                    style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    placeholder="Main task"
-                    placeholderTextColor={colors.textMuted}
-                    value={mainTask}
-                    onChangeText={setMainTask}
-                  />
-                </View>
-
-                {/* Health Goal */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Health</Text>
-                  <TextInput
-                    style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    placeholder="Health goal"
-                    placeholderTextColor={colors.textMuted}
-                    value={healthGoal}
-                    onChangeText={setHealthGoal}
-                  />
-                </View>
-
-                {/* Recovery Goal */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Recovery</Text>
-                  <TextInput
-                    style={[styles.modalInput, { backgroundColor: isDark ? colors.surface : '#f2ebf6', color: colors.textPrimary, borderColor: isDark ? colors.outlineVariant : '#ffffff', borderWidth: isDark ? 1 : 2 }]}
-                    placeholder="Recovery goal"
-                    placeholderTextColor={colors.textMuted}
-                    value={recoveryGoal}
-                    onChangeText={setRecoveryGoal}
-                  />
-                </View>
-
-                <NeomorphicCard
-                  onPress={handleSavePriorities}
-                  style={styles.submitButton}
-                  bgColor={colors.primary}
-                >
-                  <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>Save Priorities</Text>
-                </NeomorphicCard>
-
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-      </View>
-    </View>
+        <View style={[styles.composer, { backgroundColor: colors.surface, borderColor: colors.outlineVariant + '45', marginBottom: BottomTabInset + Spacing.one }]}>
+          <TextInput
+            style={[styles.input, { color: colors.textPrimary }]}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="What are you feeling?"
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+          <AnimatedPressable
+            onPress={handleSend}
+            disabled={!draft.trim() || sending}
+            style={[
+              styles.sendButton,
+              { backgroundColor: draft.trim() ? colors.primary : colors.surfaceContainerHigh },
+            ]}
+          >
+            <Ionicons name={sending ? 'hourglass-outline' : 'send'} size={18} color={draft.trim() ? colors.onPrimary : colors.textMuted} />
+          </AnimatedPressable>
+        </View>
+      </Animated.View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -419,203 +164,140 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  contentContainer: {
+  content: {
     flex: 1,
     paddingHorizontal: Spacing.four,
   },
-  blurBlob: {
+  orb: {
     position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    opacity: 0.35,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    opacity: 0.28,
+  },
+  orbTop: {
+    right: -90,
+    top: 110,
+  },
+  orbBottom: {
+    left: -100,
+    bottom: 90,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.three,
+  },
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   title: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.8,
+    fontSize: 28,
+    fontWeight: '900',
   },
-  subtitle: {
-    fontSize: 12,
-    fontWeight: '800',
+  privacyLine: {
     marginTop: 2,
-    marginBottom: Spacing.two,
-  },
-  priorityCard: {
-    marginBottom: Spacing.three,
-    gap: Spacing.half,
-  },
-  priorityCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  priorityCardLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-  },
-  priorityCardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    borderRadius: Radius.full,
-    padding: Spacing.one,
-    marginBottom: Spacing.three,
-  },
-  tabButton: {
-    flex: 1,
-    height: 42,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 120,
-    gap: Spacing.two,
-  },
-  emptyText: {
-    fontSize: 14,
-  },
-  logCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.three,
-    marginBottom: Spacing.two,
-  },
-  logLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    flex: 1,
-  },
-  logIndicator: {
-    width: 6,
-    height: 36,
-    borderRadius: Radius.full,
-  },
-  logTextContainer: {
-    flex: 1,
-    gap: 2,
-  },
-  logTitleText: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '700',
   },
-  logMeta: {
-    fontSize: 11,
-  },
-  logRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-  },
-  scoreChange: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(186, 26, 26, 0.08)',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: BottomTabInset + Spacing.four,
-    right: Spacing.four,
-    width: 60,
-    height: 60,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.elevated,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    padding: Spacing.four,
-    paddingBottom: Spacing.five,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.three,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  formGroup: {
-    marginBottom: Spacing.three,
-    gap: Spacing.one,
-  },
-  formLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  modalInput: {
-    height: 52,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.three,
-    fontSize: 15,
-  },
-  pillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.one,
-    marginTop: Spacing.one,
-  },
-  categoryPill: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
+  riskPill: {
+    minHeight: 38,
     borderRadius: Radius.full,
     borderWidth: 1,
-  },
-  categoryPillText: {
-    fontSize: 12,
-  },
-  submitButton: {
-    height: 56,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.two,
-    borderWidth: 0,
-    padding: 0,
+    gap: Spacing.one,
   },
-  submitButtonText: {
-    fontSize: 16,
+  riskText: {
+    fontSize: 12,
     fontWeight: '800',
   },
-  pressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.97 }],
+  quickRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginBottom: Spacing.three,
+  },
+  quickChip: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: Spacing.one,
+  },
+  quickText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  messagesContent: {
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.four,
+  },
+  messageWrap: {
+    width: '100%',
+    marginBottom: Spacing.two,
+  },
+  messageUserWrap: {
+    alignItems: 'flex-end',
+  },
+  messageAssistantWrap: {
+    alignItems: 'flex-start',
+  },
+  messageBubble: {
+    maxWidth: '86%',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+  },
+  suggestionButton: {
+    alignSelf: 'flex-start',
+    minHeight: 36,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  suggestionText: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  composer: {
+    minHeight: 58,
+    maxHeight: 118,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    paddingLeft: Spacing.three,
+    paddingRight: Spacing.one,
+    paddingVertical: Spacing.one,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  input: {
+    flex: 1,
+    maxHeight: 90,
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: Spacing.two,
+  },
+  sendButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

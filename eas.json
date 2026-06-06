@@ -1,23 +1,39 @@
 {
   "cli": {
-    "version": ">= 5.0.0"
+    "version": ">= 5.0.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://xgzdszsfnilsqgqrnkxo.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnemRzenNmbmlsc3FncXJua3hvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NjcyNzQsImV4cCI6MjA5NjI0MzI3NH0.fSoMmoeFADXy6wzcppNsCOh19E-68XzfMHPsjZJa1BA",
+        "EXPO_PUBLIC_AI_ENGINE_URL": "https://dagi321-dembai.hf.space"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://xgzdszsfnilsqgqrnkxo.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnemRzenNmbmlsc3FncXJua3hvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NjcyNzQsImV4cCI6MjA5NjI0MzI3NH0.fSoMmoeFADXy6wzcppNsCOh19E-68XzfMHPsjZJa1BA",
+        "EXPO_PUBLIC_AI_ENGINE_URL": "https://dagi321-dembai.hf.space"
+      },
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
       }
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://xgzdszsfnilsqgqrnkxo.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnemRzenNmbmlsc3FncXJua3hvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NjcyNzQsImV4cCI6MjA5NjI0MzI3NH0.fSoMmoeFADXy6wzcppNsCOh19E-68XzfMHPsjZJa1BA",
+        "EXPO_PUBLIC_AI_ENGINE_URL": "https://dagi321-dembai.hf.space"
+      },
       "android": {
         "buildType": "app-bundle"
       }

@@ -32,6 +32,8 @@ const KEYS = {
   MISSIONS: '@demb_db_missions',
   SYNC_QUEUE: '@demb_db_sync_queue',
   SOCIAL_LOGS: '@demb_db_social_logs',
+  SUPPORT_MESSAGES: '@demb_db_support_messages',
+  FEELING_PROMPT_STATE: '@demb_db_feeling_prompt_state',
 };
 
 // Initialize tables if using SQLite
@@ -74,6 +76,19 @@ export const initDb = async () => {
           app TEXT,
           durationMinutes INTEGER,
           timestamp INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS support_chat_messages (
+          id TEXT PRIMARY KEY,
+          role TEXT,
+          text TEXT,
+          createdAt TEXT,
+          synced INTEGER,
+          source TEXT,
+          suggestedAction TEXT
+        );
+        CREATE TABLE IF NOT EXISTS app_state_json (
+          key TEXT PRIMARY KEY,
+          value TEXT
         );
       `);
       console.log('[DB] SQLite tables initialized (Sync API)');
@@ -121,6 +136,23 @@ export const initDb = async () => {
               durationMinutes INTEGER,
               timestamp INTEGER
             );
+          `);
+          tx.executeSql(`
+            CREATE TABLE IF NOT EXISTS support_chat_messages (
+              id TEXT PRIMARY KEY,
+              role TEXT,
+              text TEXT,
+              createdAt TEXT,
+              synced INTEGER,
+              source TEXT,
+              suggestedAction TEXT
+            );
+          `);
+          tx.executeSql(`
+            CREATE TABLE IF NOT EXISTS app_state_json (
+              key TEXT PRIMARY KEY,
+              value TEXT
+            );
           `, [], () => {
             console.log('[DB] SQLite tables initialized (Legacy API)');
             resolve();
@@ -134,6 +166,50 @@ export const initDb = async () => {
     console.error('[DB] Failed to initialize SQLite tables', err);
     // Graceful fallback to AsyncStorage is already active
   }
+};
+
+export const saveJsonState = async (key: string, value: any) => {
+  const serialized = JSON.stringify(value);
+  if (isSQLiteAvailable) {
+    try {
+      if (dbSync) {
+        dbSync.runSync('INSERT OR REPLACE INTO app_state_json (key, value) VALUES (?, ?)', [key, serialized]);
+        return;
+      } else if (dbAsync) {
+        dbAsync.transaction((tx: any) => {
+          tx.executeSql('INSERT OR REPLACE INTO app_state_json (key, value) VALUES (?, ?)', [key, serialized]);
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('[DB] SQLite saveJsonState failed, writing to AsyncStorage', e);
+    }
+  }
+  await AsyncStorage.setItem(`@demb_db_json_${key}`, serialized);
+};
+
+export const getJsonState = async <T>(key: string): Promise<T | null> => {
+  if (isSQLiteAvailable) {
+    try {
+      if (dbSync) {
+        const row = dbSync.getFirstSync('SELECT value FROM app_state_json WHERE key = ?', [key]);
+        return row?.value ? JSON.parse(row.value) : null;
+      } else if (dbAsync) {
+        const row = await new Promise<any>((resolve) => {
+          dbAsync.transaction((tx: any) => {
+            tx.executeSql('SELECT value FROM app_state_json WHERE key = ?', [key], (_: any, results: any) => {
+              resolve(results.rows.length > 0 ? results.rows.item(0) : null);
+            }, () => resolve(null));
+          });
+        });
+        return row?.value ? JSON.parse(row.value) : null;
+      }
+    } catch (e) {
+      console.warn('[DB] SQLite getJsonState failed, reading from AsyncStorage', e);
+    }
+  }
+  const saved = await AsyncStorage.getItem(`@demb_db_json_${key}`);
+  return saved ? JSON.parse(saved) : null;
 };
 
 // USER SETTINGS
@@ -427,7 +503,7 @@ export const addSocialUsageLog = async (app: string, durationMinutes: number) =>
         dbSync.runSync(
           'INSERT INTO social_usage_logs (id, app, durationMinutes, timestamp) VALUES (?, ?, ?, ?)',
           [item.id, item.app, item.durationMinutes, item.timestamp]
-        );
+        ); 
         return;
       } else if (dbAsync) {
         dbAsync.transaction((tx: any) => {
@@ -506,4 +582,126 @@ export const pruneOldSocialLogs = async () => {
   const logs = await getSocialUsageLogs(0);
   const updated = logs.filter((l: any) => l.timestamp >= oneDayAgo);
   await AsyncStorage.setItem(KEYS.SOCIAL_LOGS, JSON.stringify(updated));
+};
+
+const SUPPORT_CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+const supportChatCutoffIso = () => new Date(Date.now() - SUPPORT_CHAT_RETENTION_MS).toISOString();
+
+const isRecentSupportMessage = (message: any) => {
+  const createdAt = new Date(message?.createdAt ?? 0).getTime();
+  return Number.isFinite(createdAt) && Date.now() - createdAt <= SUPPORT_CHAT_RETENTION_MS;
+};
+
+export const pruneOldSupportChatMessages = async () => {
+  const cutoff = supportChatCutoffIso();
+  if (isSQLiteAvailable) {
+    try {
+      if (dbSync) {
+        dbSync.runSync('DELETE FROM support_chat_messages WHERE createdAt < ?', [cutoff]);
+        return;
+      } else if (dbAsync) {
+        dbAsync.transaction((tx: any) => {
+          tx.executeSql('DELETE FROM support_chat_messages WHERE createdAt < ?', [cutoff]);
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('[DB] SQLite pruneOldSupportChatMessages failed', e);
+    }
+  }
+
+  const saved = await AsyncStorage.getItem(KEYS.SUPPORT_MESSAGES);
+  const messages = saved ? JSON.parse(saved) : [];
+  const updated = Array.isArray(messages) ? messages.filter(isRecentSupportMessage) : [];
+  await AsyncStorage.setItem(KEYS.SUPPORT_MESSAGES, JSON.stringify(updated));
+};
+
+export const addSupportChatMessage = async (message: any) => {
+  await pruneOldSupportChatMessages();
+
+  if (isSQLiteAvailable) {
+    try {
+      if (dbSync) {
+        dbSync.runSync(
+          `INSERT OR REPLACE INTO support_chat_messages
+          (id, role, text, createdAt, synced, source, suggestedAction)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            message.id,
+            message.role,
+            message.text,
+            message.createdAt,
+            message.synced ? 1 : 0,
+            message.source,
+            message.suggestedAction ?? null,
+          ]
+        );
+        return;
+      } else if (dbAsync) {
+        dbAsync.transaction((tx: any) => {
+          tx.executeSql(
+            `INSERT OR REPLACE INTO support_chat_messages
+            (id, role, text, createdAt, synced, source, suggestedAction)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              message.id,
+              message.role,
+              message.text,
+              message.createdAt,
+              message.synced ? 1 : 0,
+              message.source,
+              message.suggestedAction ?? null,
+            ]
+          );
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('[DB] SQLite addSupportChatMessage failed', e);
+    }
+  }
+
+  const messages = await getSupportChatMessages();
+  const updated = [message, ...messages.filter((m: any) => m.id !== message.id && isRecentSupportMessage(m))].slice(0, 80);
+  await AsyncStorage.setItem(KEYS.SUPPORT_MESSAGES, JSON.stringify(updated));
+};
+
+export const getSupportChatMessages = async (): Promise<any[]> => {
+  await pruneOldSupportChatMessages();
+
+  if (isSQLiteAvailable) {
+    try {
+      if (dbSync) {
+        const rows = dbSync.getAllSync(
+          'SELECT * FROM support_chat_messages WHERE createdAt >= ? ORDER BY createdAt DESC LIMIT 80',
+          [supportChatCutoffIso()]
+        );
+        return (rows || []).map((row: any) => ({ ...row, synced: Boolean(row.synced) }));
+      } else if (dbAsync) {
+        return await new Promise<any[]>((resolve) => {
+          dbAsync.transaction((tx: any) => {
+            tx.executeSql(
+              'SELECT * FROM support_chat_messages WHERE createdAt >= ? ORDER BY createdAt DESC LIMIT 80',
+              [supportChatCutoffIso()],
+              (_: any, results: any) => {
+                const list = [];
+                for (let i = 0; i < results.rows.length; i++) {
+                  const row = results.rows.item(i);
+                  list.push({ ...row, synced: Boolean(row.synced) });
+                }
+                resolve(list);
+              },
+              () => resolve([])
+            );
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('[DB] SQLite getSupportChatMessages failed', e);
+    }
+  }
+  const saved = await AsyncStorage.getItem(KEYS.SUPPORT_MESSAGES);
+  const messages = saved ? JSON.parse(saved) : [];
+  return Array.isArray(messages) ? messages.filter(isRecentSupportMessage) : [];
 };

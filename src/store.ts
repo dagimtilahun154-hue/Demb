@@ -14,7 +14,12 @@ import {
   removeSyncItems,
   addSocialUsageLog,
   getSocialUsageLogs,
-  pruneOldSocialLogs
+  pruneOldSocialLogs,
+  pruneOldSupportChatMessages,
+  addSupportChatMessage,
+  getSupportChatMessages,
+  getJsonState,
+  saveJsonState
 } from './db';
 import type {
   ActivitySnapshot,
@@ -29,10 +34,12 @@ import type {
   RecoveryTask,
   RecoveryTree,
   ScreenUsageSnapshot,
+  FeelingPromptState,
+  SupportChatMessage,
 } from './types/burnout';
 import { NativeModules, Platform } from 'react-native';
 import { buildRiskInputFromSignals, calculateBurnoutRisk } from './utils/burnoutEngine';
-import { generateAiRecoveryPlan } from './utils/mockAiPlan';
+import { generateAiRecoveryPlan, generateSupportReply } from './utils/mockAiPlan';
 import { getSyncBiometrics, requestSmartwatchPermissions } from './utils/healthConnect';
 import {
   fetchBuddyFeed,
@@ -198,10 +205,12 @@ export interface AppState {
   buddyGroup: BuddyGroup;
   recoveryTree: RecoveryTree;
   encouragementMessages: EncouragementMessage[];
+  supportChatMessages: SupportChatMessage[];
+  feelingPromptState: FeelingPromptState;
   
   // Actions
   hydrateAuthSession: () => Promise<void>;
-  signUp: (input: { name: string; email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
+  signUp: (input: { name: string; email: string; password: string }) => Promise<{ ok: boolean; error?: string; needsEmailConfirmation?: boolean }>;
   signIn: (input: { email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
   setOnboarding: (profile: Partial<UserProfile>) => void;
@@ -248,6 +257,11 @@ export interface AppState {
   seedObservationData: () => void;
   recordBehaviorEvent: (event: Omit<BehaviorEvent, 'id' | 'createdAt' | 'synced'>) => void;
   submitMoodCheckIn: (checkIn: Omit<MoodCheckIn, 'id' | 'createdAt'>) => void;
+  sendSupportMessage: (text: string) => Promise<void>;
+  quickSupportCheckIn: (kind: 'drained' | 'urge' | 'recovered') => Promise<void>;
+  evaluateFeelingPrompt: (reason?: 'daily' | 'high_usage') => void;
+  dismissFeelingPrompt: () => void;
+  submitFeelingPrompt: (input: { moodScore: number; stressScore: number; urgeLevel: number; note?: string }) => void;
   refreshBurnoutRisk: () => BurnoutRiskResult;
   generateRecoveryPlan: () => RecoveryPlan;
   activateRecoveryPlan: () => void;
@@ -383,6 +397,47 @@ const initialBuddyGroup: BuddyGroup = {
   ],
 };
 
+const initialFeelingPromptState: FeelingPromptState = {
+  visible: false,
+  reason: null,
+  lastDailyPromptDate: null,
+  lastHighUsagePromptDate: null,
+  lastDismissedAt: null,
+};
+
+const twoDaysMs = 48 * 60 * 60 * 1000;
+
+const isObservationReady = (startedAt: string | null) => {
+  if (!startedAt) return false;
+  return Date.now() - new Date(startedAt).getTime() >= twoDaysMs;
+};
+
+const todayKey = () => new Date().toISOString().slice(0, 10);
+
+const buildObservationSummary = (state: AppState) => {
+  const startedAt = state.observationStartedAt;
+  const since = startedAt ? new Date(startedAt).getTime() : Date.now() - twoDaysMs;
+  const recentMood = state.moodCheckIns.filter(item => new Date(item.createdAt).getTime() >= since);
+  const recentScreens = state.screenUsageSnapshots.filter(item => new Date(item.createdAt).getTime() >= since);
+  const recentActivity = state.activitySnapshots.filter(item => new Date(item.createdAt).getTime() >= since);
+  const recentEvents = state.behaviorEvents.filter(item => new Date(item.createdAt).getTime() >= since);
+  const totalSocialMinutes = Object.values(state.socialUsage).reduce((sum, minutes) => sum + minutes, 0);
+
+  return {
+    windowHours: Math.max(0, Math.round((Date.now() - since) / (60 * 60 * 1000))),
+    observationStartedAt: startedAt,
+    moodCheckIns: recentMood.slice(0, 12),
+    screenUsageSnapshots: recentScreens.slice(0, 12),
+    activitySnapshots: recentActivity.slice(0, 12),
+    behaviorEvents: recentEvents.slice(0, 30),
+    socialUsage: state.socialUsage,
+    totalSocialMinutes,
+    completedRecoverySessions: state.recoverySessions.length,
+    completedMissions: state.completedMissions.length,
+    currentRisk: state.burnoutRisk,
+  };
+};
+
 export const ENCOURAGEMENT_MESSAGES = [
   "Keep going, you're doing great.",
   "Take a small break, I'm with you.",
@@ -424,6 +479,12 @@ const recalculateBalance = (logs: EnergyLog[]): DailyBalance => {
 };
 
 const STORAGE_KEY = '@demb_app_state';
+const SUPPORT_CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+const isRecentSupportMessage = (message: SupportChatMessage) => {
+  const createdAt = new Date(message.createdAt).getTime();
+  return Number.isFinite(createdAt) && Date.now() - createdAt <= SUPPORT_CHAT_RETENTION_MS;
+};
 
 export const useAppStore = create<AppState>((set, get) => {
   
@@ -454,6 +515,8 @@ export const useAppStore = create<AppState>((set, get) => {
         buddyGroup: newState.buddyGroup ?? get().buddyGroup,
         recoveryTree: newState.recoveryTree ?? get().recoveryTree,
         encouragementMessages: newState.encouragementMessages ?? get().encouragementMessages,
+        supportChatMessages: (newState.supportChatMessages ?? get().supportChatMessages).filter(isRecentSupportMessage),
+        feelingPromptState: newState.feelingPromptState ?? get().feelingPromptState,
       };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     } catch (e) {
@@ -515,6 +578,8 @@ export const useAppStore = create<AppState>((set, get) => {
     buddyGroup: initialBuddyGroup,
     recoveryTree: initialRecoveryTree,
     encouragementMessages: [],
+    supportChatMessages: [],
+    feelingPromptState: initialFeelingPromptState,
     
     hydrateAuthSession: async () => {
       const authUser = await getCachedAuthUser();
@@ -565,12 +630,12 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ authReady: true, authStatus: 'signed_in', authUserId: result.user.id, authError: null, user: userProfile });
       await saveDbUser(userProfile);
       await saveState({ user: userProfile });
-      return { ok: true };
+      return { ok: true, needsEmailConfirmation: result.needsEmailConfirmation };
     },
 
     signIn: async ({ email, password }) => {
       const result = await signInWithEmail({ email, password });
-      if (!result.user) {
+      if (!result.user || !result.session) {
         const error = result.error ?? 'Sign in failed. Check your connection and try again.';
         set({ authError: error });
         return { ok: false, error };
@@ -1094,11 +1159,14 @@ export const useAppStore = create<AppState>((set, get) => {
         observationStartedAt: startedAt,
         observationComplete: false,
       });
-      get().seedObservationData();
       saveState({ observationStartedAt: startedAt, observationComplete: false });
     },
 
     completeObservation: () => {
+      if (!isObservationReady(get().observationStartedAt)) {
+        console.log('[Observation] 48-hour observation window is not complete yet.');
+        return;
+      }
       set({ observationComplete: true });
       const plan = get().generateRecoveryPlan();
       set({ recoveryPlan: { ...plan, active: true } });
@@ -1181,6 +1249,134 @@ export const useAppStore = create<AppState>((set, get) => {
       saveState({ moodCheckIns });
     },
 
+    sendSupportMessage: async (text) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      const userMessage: SupportChatMessage = {
+        id: Math.random().toString(36).substr(2, 9),
+        role: 'user',
+        text: trimmed,
+        createdAt: new Date().toISOString(),
+        synced: false,
+        source: 'user',
+      };
+      const supportChatMessages = [userMessage, ...get().supportChatMessages.filter(isRecentSupportMessage)].slice(0, 80);
+      set({ supportChatMessages });
+      await addSupportChatMessage(userMessage);
+      await queueSyncItem('support_chat_message', userMessage);
+      saveState({ supportChatMessages });
+
+      const reply = await generateSupportReply({
+        text: trimmed,
+        messages: supportChatMessages,
+        recoveryPlan: get().recoveryPlan,
+        risk: get().burnoutRisk,
+        observationSummary: buildObservationSummary(get()),
+      });
+
+      const assistantMessage: SupportChatMessage = {
+        id: Math.random().toString(36).substr(2, 9),
+        role: 'assistant',
+        text: reply.text,
+        createdAt: new Date().toISOString(),
+        synced: reply.source === 'groq',
+        source: reply.source,
+        suggestedAction: reply.suggestedAction,
+      };
+      const updatedMessages = [assistantMessage, ...get().supportChatMessages.filter(isRecentSupportMessage)].slice(0, 80);
+      set({ supportChatMessages: updatedMessages });
+      await addSupportChatMessage(assistantMessage);
+      saveState({ supportChatMessages: updatedMessages });
+      get().recordBehaviorEvent({
+        type: 'support_chat_message',
+        payload: { source: assistantMessage.source, suggestedAction: assistantMessage.suggestedAction },
+      });
+    },
+
+    quickSupportCheckIn: async (kind) => {
+      const quickText = {
+        drained: 'I feel drained and need support.',
+        urge: 'I want to scroll right now.',
+        recovered: 'I did something that helped me recover.',
+      }[kind];
+
+      if (kind === 'drained') {
+        get().submitMoodCheckIn({ moodScore: 4, energyScore: 3, stressScore: 7, focusScore: 4, overwhelmed: true, note: quickText });
+      } else if (kind === 'urge') {
+        get().submitMoodCheckIn({ moodScore: 5, energyScore: 5, stressScore: 6, focusScore: 3, overwhelmed: true, note: quickText });
+      } else {
+        get().addEnergyLog({
+          type: 'recovered',
+          category: 'Emotional recovery',
+          title: 'Support check-in',
+          durationMinutes: 5,
+          intensity: 'Medium',
+          notes: quickText,
+        });
+      }
+
+      await get().sendSupportMessage(quickText);
+    },
+
+    evaluateFeelingPrompt: (reason = 'daily') => {
+      const state = get().feelingPromptState;
+      if (state.visible) return;
+
+      const today = todayKey();
+      const currentHour = new Date().getHours();
+      const hasRecentDismissal = state.lastDismissedAt
+        ? Date.now() - new Date(state.lastDismissedAt).getTime() < 30 * 60 * 1000
+        : false;
+      if (hasRecentDismissal) return;
+
+      if (reason === 'daily' && currentHour >= 20 && state.lastDailyPromptDate !== today) {
+        const feelingPromptState = { ...state, visible: true, reason: 'daily' as const, lastDailyPromptDate: today };
+        set({ feelingPromptState });
+        saveJsonState('feelingPromptState', feelingPromptState);
+        saveState({ feelingPromptState });
+        return;
+      }
+
+      if (reason === 'high_usage' && state.lastHighUsagePromptDate !== today) {
+        const feelingPromptState = { ...state, visible: true, reason: 'high_usage' as const, lastHighUsagePromptDate: today };
+        set({ feelingPromptState });
+        saveJsonState('feelingPromptState', feelingPromptState);
+        saveState({ feelingPromptState });
+      }
+    },
+
+    dismissFeelingPrompt: () => {
+      const feelingPromptState = {
+        ...get().feelingPromptState,
+        visible: false,
+        reason: null,
+        lastDismissedAt: new Date().toISOString(),
+      };
+      set({ feelingPromptState });
+      saveJsonState('feelingPromptState', feelingPromptState);
+      saveState({ feelingPromptState });
+    },
+
+    submitFeelingPrompt: (input) => {
+      const reason = get().feelingPromptState.reason ?? 'daily';
+      const note = input.note?.trim() || `Feeling prompt: ${reason}, urge ${input.urgeLevel}/10`;
+      get().submitMoodCheckIn({
+        moodScore: input.moodScore,
+        energyScore: Math.max(1, Math.min(10, 11 - input.stressScore)),
+        stressScore: input.stressScore,
+        focusScore: Math.max(1, Math.min(10, 11 - input.urgeLevel)),
+        overwhelmed: input.stressScore >= 7 || input.urgeLevel >= 7,
+        note,
+      });
+      get().recordBehaviorEvent({
+        type: 'feeling_prompt',
+        payload: { reason, moodScore: input.moodScore, stressScore: input.stressScore, urgeLevel: input.urgeLevel },
+      });
+      get().sendSupportMessage(note);
+      get().dismissFeelingPrompt();
+    },
+
     refreshBurnoutRisk: () => {
       const usage = get().socialUsage;
       const latestMood = get().moodCheckIns[0];
@@ -1258,6 +1454,10 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     generateRecoveryPlan: () => {
+      const observationReady = isObservationReady(get().observationStartedAt);
+      if (!observationReady) {
+        console.log('[AI Plan] Waiting for the full 48-hour observation window before cloud planning.');
+      }
       const risk = get().refreshBurnoutRisk();
       const { generateLocalRecoveryPlan } = require('./utils/mockAiPlan');
       const plan = generateLocalRecoveryPlan({
@@ -1266,12 +1466,14 @@ export const useAppStore = create<AppState>((set, get) => {
       });
       set({ recoveryPlan: plan });
       
+      if (observationReady) {
       getSyncBiometrics().then(biometrics => {
         generateAiRecoveryPlan({
           userId: get().authUserId || get().user.id || get().user.email || 'local-user',
           risk,
           userProfile: get().user,
           latestBiometrics: biometrics,
+          observationSummary: buildObservationSummary(get()),
         }).then(aiPlan => {
           set({ recoveryPlan: aiPlan });
           saveState({ recoveryPlan: aiPlan });
@@ -1282,6 +1484,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }).catch(err => {
         console.log('[Store] Background biometrics fetch failed for AI plan:', err);
       });
+      }
 
       get().recordBehaviorEvent({
         type: 'plan_rule_executed',
@@ -1442,6 +1645,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
       // If user exceeded the sliding window, activate a supportive recovery shield.
       if (totalMinutes >= threshold && !get().focusLockActive) {
+        get().evaluateFeelingPrompt('high_usage');
         get().triggerFocusLock('Digital Overload Pattern', 1200); // 20 minute cooldown
         
         await queueSyncItem('rate_limit_lockout', { limit: threshold, actual: totalMinutes });
@@ -1518,11 +1722,14 @@ export const useAppStore = create<AppState>((set, get) => {
       try {
         await initDb();
         await pruneOldSocialLogs();
+        await pruneOldSupportChatMessages();
 
         // Load setting configurations from SQLite
         const dbUser = await getDbUser();
         const dbLogs = await getDbLogs();
         const dbMissions = await getDbCompletedMissions();
+        const dbSupportMessages = await getSupportChatMessages();
+        const dbFeelingPromptState = await getJsonState<FeelingPromptState>('feelingPromptState');
 
         const saved = await AsyncStorage.getItem(STORAGE_KEY);
         if (saved) {
@@ -1556,6 +1763,8 @@ export const useAppStore = create<AppState>((set, get) => {
             buddyGroup: parsed.buddyGroup ?? initialBuddyGroup,
             recoveryTree: parsed.recoveryTree ?? initialRecoveryTree,
             encouragementMessages: parsed.encouragementMessages ?? [],
+            supportChatMessages: (dbSupportMessages.length > 0 ? dbSupportMessages : (parsed.supportChatMessages ?? [])).filter(isRecentSupportMessage),
+            feelingPromptState: dbFeelingPromptState ?? parsed.feelingPromptState ?? initialFeelingPromptState,
             breakLoopActive: false,
             breakLoopTime: 0,
             focusLockScreenVisible: false,
@@ -1573,6 +1782,8 @@ export const useAppStore = create<AppState>((set, get) => {
               completedMissions: dbMissions,
               balance: balance,
               burnoutRisk: initialBurnoutRisk,
+              supportChatMessages: dbSupportMessages.filter(isRecentSupportMessage),
+              feelingPromptState: dbFeelingPromptState ?? initialFeelingPromptState,
               lastKnownTime: Date.now(),
             });
           }
@@ -1640,6 +1851,8 @@ export const useAppStore = create<AppState>((set, get) => {
         buddyGroup: initialBuddyGroup,
         recoveryTree: initialRecoveryTree,
         encouragementMessages: [],
+        supportChatMessages: [],
+        feelingPromptState: initialFeelingPromptState,
       });
       AsyncStorage.removeItem(STORAGE_KEY);
       AsyncStorage.removeItem(KEYS.USER);
@@ -1647,6 +1860,8 @@ export const useAppStore = create<AppState>((set, get) => {
       AsyncStorage.removeItem(KEYS.MISSIONS);
       AsyncStorage.removeItem(KEYS.SYNC_QUEUE);
       AsyncStorage.removeItem(KEYS.SOCIAL_LOGS);
+      AsyncStorage.removeItem(KEYS.SUPPORT_MESSAGES);
+      AsyncStorage.removeItem('@demb_db_json_feelingPromptState');
     }
   };
 });
@@ -1657,4 +1872,6 @@ const KEYS = {
   MISSIONS: '@demb_db_missions',
   SYNC_QUEUE: '@demb_db_sync_queue',
   SOCIAL_LOGS: '@demb_db_social_logs',
+  SUPPORT_MESSAGES: '@demb_db_support_messages',
+  FEELING_PROMPT_STATE: '@demb_db_feeling_prompt_state',
 };
