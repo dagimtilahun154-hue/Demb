@@ -14,25 +14,10 @@ Modern burnout is not always dramatic. Sometimes it looks like opening the same 
 
 ## App Preview
 
-Add README screenshots to `assets/readme/` using these names and they will render on GitHub:
-
-```text
-assets/readme/recharge-hero.png
-assets/readme/welcome.png
-assets/readme/home.png
-assets/readme/buddies.png
-```
-
-When the files are added, use this gallery block:
-
-```html
 <p align="center">
-  <img src="./assets/readme/recharge-hero.png" alt="Demb recharge character" width="260" />
   <img src="./assets/readme/welcome.png" alt="Demb welcome screen" width="180" />
   <img src="./assets/readme/home.png" alt="Demb home recovery screen" width="180" />
-  <img src="./assets/readme/buddies.png" alt="Demb buddies streak screen" width="180" />
 </p>
-```
 
 ## Highlights
 
@@ -274,4 +259,3 @@ eas build --profile production --platform android
 - Verify focus-lock and mission flows on a real Android device
 - Verify AI recovery plan generation
 - Build with the intended EAS profile
-
