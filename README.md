@@ -2,21 +2,17 @@
 
 **Protect your time, energy, and focus.**
 
-Demb is a playful recovery and focus app for people who want to break scrolling loops, rebuild attention, and stay connected with supportive buddies. It combines gentle character design, recovery scoring, focus missions, streaks, buddy circles, Supabase sync, and AI-supported recovery plans.
+Demb is a playful recovery and focus app for people who want to break scrolling loops, rebuild attention, and stay connected with supportive buddies. It combines recovery scoring, focus missions, streaks, buddy circles, Supabase sync, and AI-supported recovery plans.
 
 <p align="center">
   <img src="./assets/images/demb-app-logo.png" alt="Demb app character" width="220" />
 </p>
 
-<p align="center">
-  <a href="./demb.apk">
-    <img src="https://img.shields.io/badge/Download_Demb_APK-7C4DFF?style=for-the-badge&logo=android&logoColor=white" alt="Download Demb APK" />
-  </a>
-</p>
+## Current Demo Status
 
-<p align="center">
-  <strong>Try the latest Android build:</strong> download <a href="./demb.apk">demb.apk</a>, install it on an Android device, and experience Demb directly.
-</p>
+Demb is currently a demo mocked version. The app is usable for trying the product flow, screen design, onboarding, recovery missions, support chat, buddy circles, rewards, and profile experience, but some production behavior is still being implemented.
+
+Several flows use seeded, local, fallback, or simulated data while we finish the real integrations. Because this demo runs through Expo Go, it cannot fully access custom native modules, phone sensors, Usage Access, overlay permissions, Health Connect, background services, or other special Android permissions right now. Features that depend on those capabilities may show the UI, use fallback data, or behave as a preview instead of a complete native implementation.
 
 ## Why Demb Exists
 
@@ -29,16 +25,31 @@ Modern burnout is not always dramatic. Sometimes it looks like opening the same 
   <img src="./assets/readme/home.png" alt="Demb home recovery screen" width="180" />
 </p>
 
-## Highlights
+## Features In This Demo
 
-- **Recovery score:** A clear, friendly snapshot of the user's current rhythm.
-- **Break Loop missions:** Guided recovery actions for stepping away from draining app loops.
-- **Focus lock:** Native Android-oriented blocking and focus support.
-- **Buddy support:** Circles, streak competition, feed events, cheers, and group progress.
-- **Recovery tree:** A visual progress layer that grows with healthy behavior.
-- **AI recovery plans:** Personalized suggestions through Supabase Edge Functions and the Python AI engine.
-- **Local-first state:** SQLite and Zustand keep the experience responsive even before sync completes.
-- **Build-ready configuration:** Supabase and AI public config are available to installed EAS builds.
+- **Onboarding:** Choose your main challenges, goals, habits, stress level, and preferred recovery style.
+- **Recovery score:** See a friendly snapshot of current recovery state, burnout risk, and suggested actions.
+- **Mood check-ins:** Log mood, energy, stress, focus, overwhelm, and notes.
+- **Break Loop missions:** Try guided recovery tasks such as breathing, walking, screen-off resets, sound therapy, and other small actions.
+- **Focus lock preview:** Explore the Shield and focus-lock flow that will later connect to native Android blocking.
+- **Support chat:** Use supportive AI-style recovery prompts with local fallback responses.
+- **AI recovery plans:** Generate personalized recovery plan previews using local fallback logic and configured AI/Supabase services when available.
+- **Buddy support:** View buddy circles, group streaks, feed activity, cheers, encouragement, and shared progress.
+- **Recovery tree and rewards:** Track progress, points, achievements, tree growth, and profile milestones.
+- **Local persistence:** Zustand and Expo SQLite keep demo state responsive locally.
+- **Supabase-ready sync:** Auth, profile sync, buddy feed, buddy groups, and recovery tree sync hooks are included for configured Supabase projects.
+
+## Expo Go Disclaimer
+
+Expo Go is the recommended way to try this demo right now. It is fast and does not require downloading an app package from this repository.
+
+Expo Go has important limits for Demb:
+
+- It cannot load the custom native Android blocker in `plugins/withDembNativeBlocker.js`.
+- It cannot provide real Usage Access, overlay blocking, boot receivers, foreground services, or Health Connect permissions for this project.
+- Phone sensors and location-based mission checks may not be available or may fall back to simulated progress.
+- The Shield and focus-lock screens are useful for previewing the product flow, but real app blocking requires a custom native build.
+- Production-grade permissions, real sensor access, and deeper native behavior are still being implemented.
 
 ## Tech Stack
 
@@ -51,50 +62,58 @@ Modern burnout is not always dramatic. Sometimes it looks like opening the same 
 - Supabase JS
 - Supabase Edge Functions
 - Python FastAPI AI service
-- EAS Build for Android packages
+- EAS Build for native Android testing
 
 ## Project Structure
 
 ```text
 .
-├── AI/                         # Python AI recovery-plan service
-├── assets/                     # App icons, splash, fonts, images
-├── plugins/                    # Custom Expo native config plugins
-├── src/
-│   ├── app/                    # Expo Router screens and layouts
-│   ├── components/             # Shared UI components
-│   ├── constants/              # Theme, colors, app constants
-│   ├── types/                  # TypeScript domain types
-│   ├── utils/                  # Supabase, AI, native helpers
-│   ├── db.ts                   # SQLite schema and persistence helpers
-│   └── store.ts                # Main Zustand app store
-├── supabase/functions/         # Supabase Edge Functions
-├── app.json                    # Expo app config
-├── eas.json                    # EAS build profiles
-└── package.json                # Scripts and dependencies
+|-- AI/                         # Python AI recovery-plan service
+|-- assets/                     # App icons, splash, fonts, images
+|-- plugins/                    # Custom Expo native config plugins
+|-- src/
+|   |-- app/                    # Expo Router screens and layouts
+|   |-- components/             # Shared UI components
+|   |-- constants/              # Theme, colors, app constants
+|   |-- types/                  # TypeScript domain types
+|   |-- utils/                  # Supabase, AI, native helpers
+|   |-- db.ts                   # SQLite schema and persistence helpers
+|   `-- store.ts                # Main Zustand app store
+|-- supabase/functions/         # Supabase Edge Functions
+|-- app.json                    # Expo app config
+|-- eas.json                    # EAS build profiles
+`-- package.json                # Scripts and dependencies
 ```
 
 ## Requirements
 
 - Node.js 20 or newer
 - npm
-- Expo CLI through `npx expo`
-- Android Studio and an emulator, or a physical Android device
-- EAS CLI for cloud builds: `npm install -g eas-cli`
-- Supabase project access
+- Expo Go installed on your Android or iOS phone
+- A phone and computer on the same Wi-Fi network, or Expo tunnel mode
+- Optional: Android Studio and an emulator for local Android development
+- Optional: Supabase project access for cloud sync
 - Optional: Python 3.11+ for running the AI service locally
 
 ## Environment
 
-Create a local `.env.local` file for development:
+Copy the example environment file before local development:
 
 ```bash
-EXPO_PUBLIC_SUPABASE_URL=https://xgzdszsfnilsqgqrnkxo.supabase.co
+copy .env.example .env.local
+```
+
+Then update `.env.local` if you have your own services:
+
+```bash
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_KEY=your-supabase-anon-or-publishable-key
 EXPO_PUBLIC_AI_ENGINE_URL=https://your-ai-engine-url.example.com
 ```
 
-These values are public client configuration. The app also embeds them in Expo `extra` and `eas.json` so installed Android builds can connect to Supabase and the AI engine after EAS builds. Do not place Supabase service-role keys in this app.
+These values are public client configuration. Do not place Supabase service-role keys in this app.
+
+The app can still run as a demo when some services are unavailable, but Supabase sync and hosted AI features require valid configuration.
 
 ## Install
 
@@ -102,33 +121,70 @@ These values are public client configuration. The app also embeds them in Expo `
 npm install
 ```
 
-## Run The App
+## Run With Expo Go
 
-Start Expo:
+Start the Expo development server:
 
 ```bash
 npm start
 ```
 
-Run a development client build:
+Then open the app on a phone:
+
+1. Install **Expo Go** from Google Play or the App Store.
+2. Make sure your phone and computer are on the same Wi-Fi network.
+3. Scan the QR code shown in the terminal or Expo DevTools.
+4. Wait for Metro to bundle the app.
+5. Walk through Welcome, onboarding, Home, Support, Buddies, Shield, Rewards, and Profile.
+
+If the phone cannot connect on the same network, start Expo with a tunnel:
 
 ```bash
-npm run dev
+npx expo start --tunnel
 ```
 
-Run on Android:
+For an Android emulator, start Expo and press `a` in the terminal:
 
 ```bash
-npm run android
+npm start
 ```
 
-Run web for quick UI checks:
+For a quick browser preview:
 
 ```bash
 npm run web
 ```
 
-Expo Go is not enough for every feature because this project uses native modules, custom permissions, and native blocking configuration. Use a development build or installed APK for realistic testing.
+The web preview is useful for checking screens, but the mobile experience should be tried in Expo Go.
+
+## What To Try First
+
+- Complete onboarding with a recovery goal such as focus, sleep, movement, or wellbeing.
+- Open Home and review the recovery score, active recommendations, buddy snapshot, and mission entry points.
+- Start a Break Loop mission and complete the timer-based flow.
+- Try the walking mission, knowing that sensor or GPS checks may fall back to simulated progress in Expo Go.
+- Open Support and send a message to see the recovery-support flow.
+- Visit Buddies to review circles, group progress, cheers, and encouragement.
+- Open Shield to preview the focus lock and app-blocking flow without expecting real native blocking in Expo Go.
+- Check Rewards and Profile for points, achievements, streaks, and profile state.
+
+## Native Development Notes
+
+Expo Go is for the current demo. Native behavior needs a custom development build because Demb includes custom Android configuration and permissions.
+
+Use this only when working on native behavior:
+
+```bash
+npm run android
+```
+
+After a custom development build is installed, start Metro for that dev client:
+
+```bash
+npm run dev
+```
+
+Native behavior that requires a custom build includes app usage monitoring, overlay blocking, foreground services, boot handling, Health Connect, and the custom Android blocker plugin.
 
 ## Lint
 
@@ -148,7 +204,7 @@ Client configuration is loaded from:
 2. `process.env.EXPO_PUBLIC_SUPABASE_KEY` or `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 3. Expo embedded `extra` values in `app.json`
 
-This fallback chain prevents installed EAS builds from showing `Supabase is not configured` when local `.env.local` is not present inside the build environment.
+This fallback chain lets local development and native builds use the same public client configuration pattern.
 
 ## Supabase Edge Functions
 
@@ -192,80 +248,49 @@ Then point the app to it:
 EXPO_PUBLIC_AI_ENGINE_URL=http://localhost:8000
 ```
 
-For hosted builds, use a public HTTPS URL because installed Android apps cannot call your computer's `localhost`.
-
-## Android Builds
-
-Create a development APK:
-
-```bash
-npm run build:android:dev
-```
-
-Create an internal preview APK:
-
-```bash
-eas build --profile preview --platform android
-```
-
-Create a production Android App Bundle:
-
-```bash
-eas build --profile production --platform android
-```
-
-Build profiles in `eas.json` include the public Supabase and AI URLs required by installed builds.
-
-## Native Notes
-
-`plugins/withDembNativeBlocker.js` customizes Android native configuration for app blocking and related permissions. After changing native plugins, permissions, package name, or Android build settings, rebuild the development client or APK.
+For a physical phone, `localhost` means the phone itself, not your computer. Use a reachable LAN address or a public HTTPS URL if the mobile app needs to call the AI service.
 
 ## Troubleshooting
+
+### Expo Go does not open the app
+
+- Confirm your phone and computer are on the same Wi-Fi network.
+- Restart Metro with `npm start`.
+- Try tunnel mode with `npx expo start --tunnel`.
+- Clear the Expo cache with `npx expo start --clear` if bundling gets stuck.
 
 ### Supabase is not configured
 
 - Confirm `.env.local` exists for local development.
-- Confirm `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_KEY` are set in the EAS profile used for the build.
-- Rebuild the app after changing public Expo environment values. They are embedded at build time.
-
-### Auth works locally but not in the APK
-
-- Install a fresh APK after changing `app.json`, `eas.json`, or `.env.local`.
-- Confirm the built profile is `development`, `preview`, or `production` from this repo's `eas.json`.
-- Check Supabase Auth settings and allowed redirect/deep-link URLs if using redirect flows.
+- Confirm `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_KEY` are set.
+- Restart Expo after changing public Expo environment values.
 
 ### AI plans fail
 
-- Confirm `EXPO_PUBLIC_AI_ENGINE_URL` points to a public HTTPS deployment for installed builds.
+- Confirm `EXPO_PUBLIC_AI_ENGINE_URL` points to a reachable service.
+- Use a LAN or HTTPS URL when testing from a physical phone.
 - Check Supabase Edge Function logs if the app is calling a Supabase function.
 - Check the AI service health endpoint or hosting logs.
 
-### Native behavior does not update
+### Sensors, permissions, or app blocking do not work
 
-- Stop Metro.
-- Rebuild the development client or APK.
-- Reinstall the app on the device.
+- This is expected in the Expo Go demo.
+- Expo Go cannot load Demb's custom Android blocker module.
+- Sensor, Health Connect, Usage Access, overlay, and background-service features require custom native implementation and a custom development build.
 
 ## Useful Commands
 
 ```bash
 npm install
 npm start
-npm run dev
-npm run android
+npx expo start --tunnel
+npx expo start --clear
 npm run web
 npm run lint
-npm run build:android:dev
-eas build --profile preview --platform android
-eas build --profile production --platform android
+npm run android
+npm run dev
 ```
 
-## Release Checklist
+## Implementation Status
 
-- Run `npm run lint`
-- Verify sign up and sign in on a clean installed APK
-- Verify Supabase profile sync
-- Verify buddy feed and recovery tree sync
-- Verify focus-lock and mission flows on a real Android device
-- Verify AI recovery plan generation
-- Build with the intended EAS profile
+Demb is actively being implemented. The current repository is intended to show the app direction, product experience, UI, local recovery flows, mocked support behavior, and integration points. Native permissions, real device-sensor access, production app blocking, and complete cloud-backed behavior are still in progress.
