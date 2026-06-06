@@ -1,19 +1,49 @@
 # Demb
 
-Demb is a wellness and focus recovery app built with Expo and React Native. It helps users notice burnout signals, run focus-lock missions, build recovery streaks, connect with buddy circles, and get AI-supported recovery plans.
+**Protect your time, energy, and focus.**
 
-The app is designed for Android-first native builds, with Expo Router for navigation, local SQLite/Zustand persistence, Supabase for auth and synced community data, and a small Python AI service for recovery plan generation.
+Demb is a playful recovery and focus app for people who want to break scrolling loops, rebuild attention, and stay connected with supportive buddies. It combines gentle character design, recovery scoring, focus missions, streaks, buddy circles, Supabase sync, and AI-supported recovery plans.
 
-## Features
+<p align="center">
+  <img src="./assets/images/demb-app-logo.png" alt="Demb app character" width="220" />
+</p>
 
-- Email sign up and sign in with Supabase Auth
-- Local-first recovery state with SQLite and Zustand
-- Burnout and recovery scoring flows
-- Focus lock and mission screens for screen-off, walking, and recovery activities
-- Buddy circles, buddy feed events, cheers, and group progress
-- Profile, streak, tree, and activity history surfaces
-- AI recovery plan support through Supabase Edge Functions and the Python AI engine
-- Android native permissions and blocking hooks through the custom Expo config plugin
+## Why Demb Exists
+
+Modern burnout is not always dramatic. Sometimes it looks like opening the same apps again, losing track of time, feeling foggy, or needing a small nudge to recover. Demb turns that nudge into a friendly mobile experience: check your recovery score, start a mission, lock into a healthier rhythm, and keep your streak alive with buddy support.
+
+## App Preview
+
+Add README screenshots to `assets/readme/` using these names and they will render on GitHub:
+
+```text
+assets/readme/recharge-hero.png
+assets/readme/welcome.png
+assets/readme/home.png
+assets/readme/buddies.png
+```
+
+When the files are added, use this gallery block:
+
+```html
+<p align="center">
+  <img src="./assets/readme/recharge-hero.png" alt="Demb recharge character" width="260" />
+  <img src="./assets/readme/welcome.png" alt="Demb welcome screen" width="180" />
+  <img src="./assets/readme/home.png" alt="Demb home recovery screen" width="180" />
+  <img src="./assets/readme/buddies.png" alt="Demb buddies streak screen" width="180" />
+</p>
+```
+
+## Highlights
+
+- **Recovery score:** A clear, friendly snapshot of the user's current rhythm.
+- **Break Loop missions:** Guided recovery actions for stepping away from draining app loops.
+- **Focus lock:** Native Android-oriented blocking and focus support.
+- **Buddy support:** Circles, streak competition, feed events, cheers, and group progress.
+- **Recovery tree:** A visual progress layer that grows with healthy behavior.
+- **AI recovery plans:** Personalized suggestions through Supabase Edge Functions and the Python AI engine.
+- **Local-first state:** SQLite and Zustand keep the experience responsive even before sync completes.
+- **Build-ready configuration:** Supabase and AI public config are available to installed EAS builds.
 
 ## Tech Stack
 
@@ -69,7 +99,7 @@ EXPO_PUBLIC_SUPABASE_KEY=your-supabase-anon-or-publishable-key
 EXPO_PUBLIC_AI_ENGINE_URL=https://your-ai-engine-url.example.com
 ```
 
-These values are public client configuration. The app also embeds them in Expo `extra` and `eas.json` so installed Android builds can connect to Supabase after EAS builds. Do not place Supabase service-role keys in this app.
+These values are public client configuration. The app also embeds them in Expo `extra` and `eas.json` so installed Android builds can connect to Supabase and the AI engine after EAS builds. Do not place Supabase service-role keys in this app.
 
 ## Install
 
@@ -115,7 +145,7 @@ The current lint setup may report warnings for older screens and hooks. Warnings
 
 ## Supabase Setup
 
-The app expects Supabase Auth and several app tables used by profile sync, buddy feed, buddy groups, and recovery tree progress.
+The app expects Supabase Auth and app tables used by profile sync, buddy feed, buddy groups, and recovery tree progress.
 
 Client configuration is loaded from:
 
@@ -141,7 +171,7 @@ supabase functions deploy groq-recovery-plan
 supabase functions deploy groq-support-chat
 ```
 
-Set any required provider secrets in Supabase, not in the mobile app:
+Set provider secrets in Supabase, not in the mobile app:
 
 ```bash
 supabase secrets set GROQ_API_KEY=your_key
