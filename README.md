@@ -8,6 +8,16 @@ Demb is a playful recovery and focus app for people who want to break scrolling 
   <img src="./assets/images/demb-app-logo.png" alt="Demb app character" width="220" />
 </p>
 
+<p align="center">
+  <a href="./demb.apk">
+    <img src="https://img.shields.io/badge/Download_Demb_APK-7C4DFF?style=for-the-badge&logo=android&logoColor=white" alt="Download Demb APK" />
+  </a>
+</p>
+
+<p align="center">
+  <strong>Try the latest Android build:</strong> download <a href="./demb.apk">demb.apk</a>, install it on an Android device, and experience Demb directly.
+</p>
+
 ## Why Demb Exists
 
 Modern burnout is not always dramatic. Sometimes it looks like opening the same apps again, losing track of time, feeling foggy, or needing a small nudge to recover. Demb turns that nudge into a friendly mobile experience: check your recovery score, start a mission, lock into a healthier rhythm, and keep your streak alive with buddy support.
