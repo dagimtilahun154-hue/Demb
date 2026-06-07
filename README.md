@@ -98,6 +98,23 @@ Makes positive behavior visible through milestones, streaks, achievements, and g
 Helps users reduce distractions and create intentional periods of focused work and recovery.
 
 ---
+## Screenshots
+
+<p align="center">
+  <img src="./assets/readme/Screenshot_20260603-051517.jpg" alt="Demb onboarding screen" width="180" />
+  <img src="./assets/readme/Screenshot_20260603-061759.jpg" alt="Demb home screen" width="180" />
+  <img src="./assets/readme/Screenshot_20260605-133030.jpg" alt="Demb recovery dashboard" width="180" />
+</p>
+
+<p align="center">
+  <img src="./assets/readme/Screenshot_20260606-215000.jpg" alt="Demb AI wellness companion" width="180" />
+  <img src="./assets/readme/Screenshot_20260606-215023.jpg" alt="Demb accountability circles" width="180" />
+  <img src="./assets/readme/Screenshot_20260606-215037.jpg" alt="Demb progress and rewards" width="180" />
+</p>
+The screenshots below show Demb’s core mobile experience, including onboarding, recovery guidance, AI support, accountability, focus tools, and progress tracking.
+<p align="center">
+  <img src="./assets/readme/Screenshot_20260607-165743.jpg" alt="Demb focus protection screen" width="180" />
+</p>
 
 ## Potential Impact
 
