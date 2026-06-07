@@ -129,6 +129,16 @@ Demb has the potential to support:
 
 By combining behavioral insights, AI support, accountability, and recovery-focused experiences, Demb aims to help users create lasting positive change rather than temporary restrictions.
 
+
+> ⚠️ **Important Note **
+>
+> Demb is currently built and distributed using **Expo** to enable rapid development and testing during the hackathon.
+>
+> Some of Demb's planned capabilities rely on device-level Android features, sensors, and permissions that require a custom production build and cannot be fully demonstrated inside the standard Expo development environment.
+>
+> This release showcases the complete user experience, including onboarding, recovery missions, AI guidance, accountability circles, focus management, wellbeing tracking, and the overall product vision.
+>
+> While certain native integrations are reserved for future production builds, reviewers can explore and evaluate Demb's core functionality, user flows, and wellness framework through this version of the application
 ---
 
 ## Technology
@@ -201,8 +211,7 @@ npm start
 ```
 
 Scan the generated QR code using Expo Go.
-
-##Important: This release demonstrates Demb's core user experience, AI guidance flow, accountability features, and recovery system while additional platform integrations continue to be developed.
+.
 
 ---
 
