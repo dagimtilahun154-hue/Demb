@@ -111,11 +111,11 @@ Helps users reduce distractions and create intentional periods of focused work a
   <img src="./assets/readme/Screenshot_20260606-215023.jpg" alt="Demb accountability circles" width="180" />
   <img src="./assets/readme/Screenshot_20260606-215037.jpg" alt="Demb progress and rewards" width="180" />
 </p>
-The screenshots below show Demb’s core mobile experience, including onboarding, recovery guidance, AI support, accountability, focus tools, and progress tracking.
+
 <p align="center">
   <img src="./assets/readme/Screenshot_20260607-165743.jpg" alt="Demb focus protection screen" width="180" />
 </p>
-
+The screenshots below show Demb’s core mobile experience, including onboarding, recovery guidance, AI support, accountability, focus tools, and progress tracking.
 ## Potential Impact
 
 Digital wellbeing affects people of all ages.
@@ -202,7 +202,7 @@ npm start
 
 Scan the generated QR code using Expo Go.
 
-> Important: This release demonstrates Demb's core user experience, AI guidance flow, accountability features, and recovery system while additional platform integrations continue to be developed.
+##Important: This release demonstrates Demb's core user experience, AI guidance flow, accountability features, and recovery system while additional platform integrations continue to be developed.
 
 ---
 
