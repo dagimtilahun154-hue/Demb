@@ -132,7 +132,7 @@ By combining behavioral insights, AI support, accountability, and recovery-focus
 
 > ⚠️ **Important Note **
 >
-> Demb is currently built and distributed using **Expo** to enable rapid development and testing during the hackathon.
+> Demb is currently built and distributed using **Expo** to enable rapid development and testing .
 >
 > Some of Demb's planned capabilities rely on device-level Android features, sensors, and permissions that require a custom production build and cannot be fully demonstrated inside the standard Expo development environment.
 >
